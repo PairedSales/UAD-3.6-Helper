@@ -39,6 +39,9 @@ const reviewCard   = $('#review-card');
 const reviewBody   = $('#review-body');
 const reviewCount  = $('#review-count');
 const debugCard    = $('#debug-card');
+const inputCard    = $('#input-card');
+const appContainer = $('.app-container');
+const appFooter    = $('.app-footer');
 
 /* ---- State ---- */
 let currentImageBlob = null;
@@ -160,6 +163,7 @@ function resetResults() {
 }
 
 function resetState() {
+  placeInputCard('top');
   currentImageBlob = null;
   previewImg.src = '';
   previewWrap.classList.add('hidden');
@@ -168,6 +172,27 @@ function resetState() {
   resetResults();
   clearStatus();
   progressWrap.classList.add('hidden');
+}
+
+/**
+ * Where the paste box sits.
+ *
+ * Above the results while there are none, because that is the only thing to
+ * do; below them once there are, because the numbers are what you came for and
+ * scrolling past the screenshot to reach them every time is friction. Moving
+ * the node rather than reordering with flexbox keeps the card margins — which
+ * are adjacency-based — correct in both arrangements.
+ */
+function placeInputCard(where) {
+  const anchor = where === 'bottom' ? appFooter : summaryCard;
+  if (inputCard.nextElementSibling !== anchor) appContainer.insertBefore(inputCard, anchor);
+}
+
+/** Bring the summary into view if the reorder left it off screen. */
+function revealSummary() {
+  const box = summaryCard.getBoundingClientRect();
+  if (box.top >= 0 && box.top < window.innerHeight * 0.5) return;
+  summaryCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* ================================================================== */
@@ -221,6 +246,7 @@ async function runAnalysis() {
 
     summaryCard.classList.remove('hidden');
     if (result.failed || rows.length === 0) {
+      placeInputCard('top');
       renderNotices(result.warnings || []);
       summaryGrid.innerHTML = '';
       showStatus('No listings could be read from this image.', 'error');
@@ -231,6 +257,8 @@ async function runAnalysis() {
     for (const card of [columnsCard, mappingCard, reviewCard, debugCard]) {
       card.classList.remove('hidden');
     }
+    placeInputCard('bottom');
+    revealSummary();
 
     renderColumns(result);
     recompute();
@@ -248,6 +276,7 @@ async function runAnalysis() {
     );
   } catch (err) {
     if (stale()) return;
+    placeInputCard('top');
     console.error(err);
     showStatus(`Analysis failed: ${err.message || 'the image could not be read'}`, 'error');
     setProgress(100, 'Failed');

@@ -26,6 +26,9 @@ browser flags either way.
 2. `Ctrl+V` into the page (or click to upload).
 3. Read the three cards. Check the review table underneath. Copy.
 
+The paste box moves below the results once there is something to show, so the
+numbers are the first thing on the page on every subsequent paste.
+
 ### What it computes
 
 | Bucket | Rows | Price used |
