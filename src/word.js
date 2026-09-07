@@ -167,14 +167,24 @@ function matchWord(raster, candidates, font, weight) {
  * and keep the winner for the rest of the run.
  */
 function pickFont(rasters, candidates, weight) {
+  /* A handful of cells is plenty to tell five families apart, and this runs
+   * once per candidate column: scoring every raster against every candidate in
+   * five fonts was the single most expensive thing the app did. */
+  const step = Math.max(1, Math.floor(rasters.length / CFG.FONT_SAMPLE_RASTERS));
+  const sample = [];
+  for (let i = 0; i < rasters.length && sample.length < CFG.FONT_SAMPLE_RASTERS; i += step) {
+    sample.push(rasters[i]);
+  }
+  if (!sample.length) return { font: CFG.SYNTH_FONTS[0], mean: 0 };
+
   let best = null;
   for (const font of CFG.SYNTH_FONTS) {
     let total = 0;
-    for (const raster of rasters) {
+    for (const raster of sample) {
       const m = matchWord(raster, candidates, font, weight);
       if (m) total += m.score;
     }
-    const mean = rasters.length ? total / rasters.length : 0;
+    const mean = total / sample.length;
     if (!best || mean > best.mean) best = { font, mean };
   }
   return best || { font: CFG.SYNTH_FONTS[0], mean: 0 };

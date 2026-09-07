@@ -129,6 +129,10 @@ function renderDebugClusters(el, result) {
 function renderDebugPerf(el, result, perf) {
   if (!el) return;
   const lines = [];
+  if (result.surf.segments) {
+    lines.push(`read from ${result.surf.segments.length} column group(s) cut out of the page — ` +
+      `the image below is those columns side by side, which is all that was analyzed`);
+  }
   lines.push(`source ${result.surf.src.width}×${result.surf.src.height}px  ` +
              `→ upscaled ${result.surf.W}×${result.surf.H}  ` +
              `Otsu ${result.surf.thr}  medRow ${result.surf.medH}`);

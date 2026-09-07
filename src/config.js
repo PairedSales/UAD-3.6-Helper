@@ -4,6 +4,19 @@
 /* "GRID" and "STATUS" is new and specific to this app.                    */
 /* ===================================================================== */
 
+/*
+ * The working scale of the surface currently being processed.
+ *
+ * Every "CFG.UPSCALE" in the ported imaging and rule-stripping code means one
+ * thing: convert a length in SOURCE pixels to the surface being worked on.
+ * That is not always 4x any more — the pass that locates the columns runs at
+ * source resolution, and only the columns worth reading get upscaled — so the
+ * conversion factor has to be a property of the surface rather than a constant.
+ */
+let _workScale = 4;
+function setWorkScale(s) { _workScale = s; }
+function workScale() { return _workScale; }
+
 const CFG = {
   /* ---- Preprocessing (MLS-Extract parity) ---- */
   UPSCALE: 4,                   // Nearest-neighbor upscale factor
@@ -82,6 +95,13 @@ const CFG = {
    * would look like "no rows found" instead of "out of memory". */
   MAX_UPSCALED_MPX: 60,
 
+  /* Scale of the pass that finds the rows and columns. It only has to locate
+   * things, so it runs at source resolution; MLS-Extract likewise treats its
+   * full-page pass as a locator and re-analyzes the crop it settles on. */
+  LOCATE_SCALE: 1,
+  COLUMN_PAD_SRC: 3,            // Source px kept around each column when cropping
+  COLUMN_GAP_SRC: 12,           // Gutter drawn between columns in the compacted surface
+
   /* --- Tokenizing a row ---
    * The gap that ends a cell is derived from the screenshot's own glyph
    * width, never from a fixed pixel count. Intra-cell gaps (around a comma,
@@ -127,6 +147,7 @@ const CFG = {
   HEADER_MIN_ANCHORS: 2,        // …of which this many must be Stat/List/Sold/MLS
 
   /* --- Word matching (status tokens, header labels) --- */
+  FONT_SAMPLE_RASTERS: 20,      // Cells the ONE font-selection pass may look at
   WORD_NORM_W: 128,
   WORD_NORM_H: 32,
   WORD_ASPECT_WEIGHT: 0.25,

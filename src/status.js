@@ -27,10 +27,17 @@
  * comes from stroke cores rather than anti-aliased edges — which is what keeps
  * one code sampling to the same colour on a shaded row and an unshaded one.
  */
-function sampleInkColor(rgbCanvas, box) {
+function sampleInkColor(surf, box) {
+  const rgbCanvas = surf.rgb;
   const ctx = rgbCanvas.getContext('2d', { willReadFrequently: true });
-  const x = Math.max(0, box.x), y = Math.max(0, box.y);
-  const w = Math.min(rgbCanvas.width - x, box.w), h = Math.min(rgbCanvas.height - y, box.h);
+  /* Boxes are in the working surface's coordinates, which may be a compacted
+   * arrangement of the original columns; the colour canvas is the untouched
+   * source. */
+  const k = surf.scale;
+  const x = Math.max(0, Math.floor(compactToSourceX(surf, box.x)));
+  const y = Math.max(0, Math.floor(box.y / k));
+  const w = Math.min(rgbCanvas.width - x, Math.max(1, Math.round(box.w / k)));
+  const h = Math.min(rgbCanvas.height - y, Math.max(1, Math.round(box.h / k)));
   if (w <= 0 || h <= 0) return null;
 
   const d = ctx.getImageData(x, y, w, h).data;
@@ -115,7 +122,7 @@ function columnIsNumeric(surf, col, bank) {
   return looked >= 2 && numeric / looked >= 0.75;
 }
 
-function scoreStatusColumn(surf, dataRows, col, headerRole, bank) {
+function scoreStatusColumn(surf, dataRows, col, headerRole, bank, font) {
   const cells = [];
   for (const [row, token] of col.cells) {
     if (token.tall.length < 1 || token.tall.length > CFG.STATUS_MAX_GLYPHS) continue;
@@ -125,16 +132,14 @@ function scoreStatusColumn(surf, dataRows, col, headerRole, bank) {
   if (cells.length < 2) return null;
   if (bank && headerRole !== 'status' && columnIsNumeric(surf, col, bank)) return null;
 
-  /* Score candidacy on a sample. pickFont is five families × the whole
-   * vocabulary per cell, and running it on every cell of every column is what
-   * made a large grid appear to hang. The winner is re-read in full afterwards. */
+  /* Candidacy is judged on a sample; the winning column is read in full
+   * afterwards. Scoring every cell of every column is what made a large grid
+   * appear to hang. */
   const step = Math.max(1, Math.floor(cells.length / CFG.STATUS_SAMPLE_CELLS));
   const sample = [];
   for (let i = 0; i < cells.length && sample.length < CFG.STATUS_SAMPLE_CELLS; i += step) {
     sample.push(cells[i]);
   }
-
-  const font = pickFont(sample.map(c => c.raster), RECOGNIZED_TOKENS, CFG.SYNTH_WEIGHT).font;
 
   let resolved = 0, scoreSum = 0;
   for (const cell of sample) {
@@ -166,12 +171,20 @@ function scoreStatusColumn(surf, dataRows, col, headerRole, bank) {
  * column winning and every row inheriting one code — moves the entire grid
  * into one bucket at once.
  */
-function findStatusColumn(surf, dataRows, cols, headerRoles, bank) {
+function findStatusColumn(surf, dataRows, cols, headerRoles, bank, uiFont) {
   let best = null;
   let headerNamed = null;
 
+  /* The font family is a property of the SCREENSHOT, not of a column, so it is
+   * chosen once. Choosing it per column meant five families × the whole
+   * vocabulary × a sample of cells, twenty-odd times over — and a per-column
+   * sample small enough to be affordable was also small enough to pick the
+   * wrong family. One decision, made on plenty of evidence, is both faster and
+   * more reliable. */
+  const font = uiFont || pickStatusFont(surf, cols, headerRoles);
+
   for (const col of cols) {
-    const res = scoreStatusColumn(surf, dataRows, col, headerRoles.get(col), bank);
+    const res = scoreStatusColumn(surf, dataRows, col, headerRoles.get(col), bank, font);
     if (!res) continue;
     if (res.headerBonus) headerNamed = res;
     if (res.resolvedFrac > 0 || res.headerBonus) {
@@ -198,6 +211,34 @@ function findStatusColumn(surf, dataRows, cols, headerRoles, bank) {
   return best;
 }
 
+/**
+ * Choose the UI font family from whichever column looks most like the status
+ * column, before any column has been scored.
+ *
+ * Used only when no header row was recognized; with a header, its labels are
+ * far better evidence and the font comes from there.
+ */
+function pickStatusFont(surf, cols, headerRoles) {
+  let candidate = null;
+  for (const col of cols) {
+    if (headerRoles.get(col) === 'status') { candidate = col; break; }
+    const short = Array.from(col.cells.values())
+      .filter(t => t.tall.length >= 2 && t.tall.length <= CFG.STATUS_MAX_GLYPHS).length;
+    if (short < 3) continue;
+    if (!candidate || short > candidate._shortCount) { candidate = col; candidate._shortCount = short; }
+  }
+  if (!candidate) return CFG.SYNTH_FONTS[0];
+
+  const rasters = [];
+  for (const t of candidate.cells.values()) {
+    const r = rasterizeBox(surf.gray, t.bbox.x, t.bbox.y, t.bbox.w, t.bbox.h);
+    if (r) rasters.push(r);
+  }
+  const pick = pickFont(rasters, RECOGNIZED_TOKENS, CFG.SYNTH_WEIGHT);
+  console.log(`[Stat] UI font chosen from col ${candidate.index}: ${pick.font} (${pick.mean.toFixed(3)})`);
+  return pick.font;
+}
+
 /** Ink width of a rasterized cell, used as a hard gate before correlating. */
 function inkWidth(cell) {
   return cell.raster.w;
@@ -218,7 +259,7 @@ function inkWidth(cell) {
  * that stretch has thrown their proportions away.
  */
 function clusterStatusCells(surf, cells) {
-  for (const cell of cells) cell.color = sampleInkColor(surf.rgb, cell.token.bbox);
+  for (const cell of cells) cell.color = sampleInkColor(surf, cell.token.bbox);
 
   const clusters = [];
   for (const cell of cells) {

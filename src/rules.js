@@ -1,4 +1,10 @@
 /* ===== UAD 3.6 Helper — Surface Analysis & Table Rules ================ */
+/* SECOND deliberate deviation from the port: every CFG.UPSCALE here reads     */
+/* workScale() instead. Each one converts a length in SOURCE pixels to the     */
+/* surface being worked on, and this app works on two kinds of surface — a     */
+/* source-resolution pass that locates the columns, and 4x crops of the        */
+/* columns worth reading. The meaning is unchanged; only the constant is now   */
+/* a property of the surface.                                                  */
 /* Ported from MLS-Extract (script.js, SECTION 10).                       */
 /*                                                                        */
 /* One deliberate change: findColumnBands() takes an explicit minGutter    */
@@ -25,8 +31,8 @@ function analyzeSurface(grayCanvas) {
 
   const hP = hProjection(bin, W, H);
   const rawRows = findRows(hP, W, CFG.MIN_ROW_DENSITY);
-  const minH = CFG.UPSCALE * 5;
-  const maxH = CFG.UPSCALE * 30;
+  const minH = workScale() * 5;
+  const maxH = workScale() * 30;
   const rows = rawRows.filter(r => r.h >= minH && r.h <= maxH);
 
   return { gray: grayCanvas, bin, W, H, rows, rawRows, thr, minH, maxH };
@@ -34,7 +40,7 @@ function analyzeSurface(grayCanvas) {
 
 /** Median row-band height, used to scale every gutter/gridline threshold. */
 function medianRowHeight(rows) {
-  if (!rows.length) return CFG.UPSCALE * 8;
+  if (!rows.length) return workScale() * 8;
   const hs = rows.map(r => r.h).sort((a, b) => a - b);
   return hs[Math.floor(hs.length / 2)];
 }
@@ -94,8 +100,8 @@ function suppressGridLines(bin, W, H, medH) {
  */
 function stripFullSpanRules(bin, W, H) {
   const out = Uint8Array.from(bin);
-  const slack = CFG.RULE_SPAN_SLACK_SRC * CFG.UPSCALE;
-  const maxThick = CFG.RULE_MAX_THICK_SRC * CFG.UPSCALE;
+  const slack = CFG.RULE_SPAN_SLACK_SRC * workScale();
+  const maxThick = CFG.RULE_MAX_THICK_SRC * workScale();
 
   /* Vertical: column separators, and the borders a crop begins or ends on. */
   const vSpan = new Uint8Array(W);
@@ -158,7 +164,7 @@ function stripTableRules(bin, W, H) {
   let out = stripFullSpanRules(bin, W, H);
 
   const rows = findRows(hProjection(out, W, H), W, CFG.MIN_ROW_DENSITY)
-    .filter(r => r.h >= CFG.UPSCALE * 5 && r.h <= CFG.UPSCALE * 30);
+    .filter(r => r.h >= workScale() * 5 && r.h <= workScale() * 30);
   if (rows.length) out = suppressGridLines(out, W, H, medianRowHeight(rows));
 
   let removed = 0;
@@ -185,7 +191,7 @@ function findColumnBands(bin, W, rows, medH, gutterOverride) {
   const minGutter = gutterOverride
     ? Math.max(2, Math.round(gutterOverride))
     : Math.max(2, Math.round(medH * CFG.COL_GUTTER_RATIO));
-  const minBandW = CFG.MIN_DIGIT_W_SRC * CFG.UPSCALE;
+  const minBandW = CFG.MIN_DIGIT_W_SRC * workScale();
   const bands = [];
 
   let x = 0;

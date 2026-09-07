@@ -140,17 +140,19 @@ async function loadDigitBank() {
     try { bank['$'].push(await loadTemplateFromImage(key, rx)); }
     catch (err) { console.warn('[Templates] dollar reference failed:', err.message); }
   }
-  /* Synthesized fallbacks. The real crops carry connectMLS's exact pixels, but
-   * a screenshot taken on a machine with a different UI font renders a
-   * different currency symbol, and binarization sometimes eats the vertical
-   * stroke and leaves something closer to an 'S'. Both are covered here rather
-   * than left to chance — the leading glyph of every price depends on it. */
-  for (const font of CFG.SYNTH_FONTS) {
-    for (const ch of ['$', 'S']) {
-      const t = createSynthesizedTemplate(ch, font, 'normal');
-      if (t) bank['$'].push(t);
-    }
-  }
+  /* One synthesized 'S', for when binarization eats the symbol's vertical
+   * stroke and leaves something closer to an S.
+   *
+   * The bucket is deliberately small. Whether a column carries a currency
+   * prefix is settled by decideCurrencyPrefix from the comma arithmetic, so
+   * these templates only have to stop a currency symbol being read as a digit
+   * — and every template in this bank is correlated against every glyph in the
+   * grid, five shifts each. Ten synthesized variants here cost more than they
+   * were ever worth. A font-specific one is added on demand by
+   * fontAdaptedDigitBank when the reference bank cannot read a cell. */
+  const sTemplate = createSynthesizedTemplate('S', CFG.SYNTH_FONTS[1], 'normal');
+  if (sTemplate) bank['$'].push(sTemplate);
+
   if (bank['$'].length === 0) throw new Error('No dollar-sign templates could be built');
 
   console.log(`[Templates] Digit bank ready (10 digits, ${bank['$'].length} dollar templates)`);

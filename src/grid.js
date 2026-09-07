@@ -22,7 +22,9 @@
  * colour-codes the status column, and that colour is useful evidence for
  * grouping identical status cells.
  */
-function buildSurface(img) {
+function buildSurface(img, scale) {
+  const k = scale || CFG.UPSCALE;
+  setWorkScale(k);
   let src = canvasFromImage(img);
 
   /* A 2× HiDPI paste upscaled 4× is ~90 megapixels per canvas, and Chrome
@@ -30,7 +32,7 @@ function buildSurface(img) {
    * rather than by throwing — which downstream looks exactly like an empty
    * page. Downscale first and say so. */
   let downscaled = 0;
-  const mpx = (src.width * src.height * CFG.UPSCALE * CFG.UPSCALE) / 1e6;
+  const mpx = (src.width * src.height * k * k) / 1e6;
   if (mpx > CFG.MAX_UPSCALED_MPX) {
     const factor = Math.sqrt(CFG.MAX_UPSCALED_MPX / mpx);
     const w = Math.max(1, Math.round(src.width * factor));
@@ -45,8 +47,13 @@ function buildSurface(img) {
     src = c;
   }
 
-  const up = upscaleCanvas(src, CFG.UPSCALE);
-  const rgb = cloneCanvas(up);            /* colour, before grayscale */
+  const up = k === 1 ? cloneCanvas(src) : upscaleCanvas(src, k);
+
+  /* Colour is sampled from the SOURCE canvas, not an upscaled copy of it.
+   * Only the status cells need colour, they are a few hundred pixels each, and
+   * an upscaled clone of a full grid is ~96 MB that has to be allocated and
+   * copied before anything else can start. Callers divide by CFG.UPSCALE. */
+  const rgb = src;
 
   toGrayscale(up);
   const shadedBands = normalizeShadedBands(up);
@@ -60,16 +67,38 @@ function buildSurface(img) {
   const stripped = stripTableRules(rawBin, W, H);
   const bin = stripped.bin;
 
+  /* A grayscale copy with the table rules whitened out.
+   *
+   * stripTableRules erases rules from the BINARY, which is all the full-page
+   * path needs. But the compaction crops from the grayscale canvas, and a rule
+   * that was full-span across the page is no longer full-span once the columns
+   * either side of it are removed — so it survives into the compacted surface
+   * and reappears as a stray row band. Whitening it here means the pixels the
+   * crop inherits already agree with the binary about what is content. */
+  const grayClean = cloneCanvas(gray);
+  {
+    const gctx = grayClean.getContext('2d', { willReadFrequently: true });
+    const gimg = gctx.getImageData(0, 0, W, H);
+    let n = 0;
+    for (let i = 0; i < rawBin.length; i++) {
+      if (rawBin[i] === 0 && bin[i] === 1) {
+        gimg.data[i * 4] = gimg.data[i * 4 + 1] = gimg.data[i * 4 + 2] = 255;
+        n++;
+      }
+    }
+    if (n) gctx.putImageData(gimg, 0, 0);
+  }
+
   const hP = hProjection(bin, W, H);
   const rawRows = findRows(hP, W, CFG.MIN_ROW_DENSITY);
-  const minH = CFG.UPSCALE * 5;
-  const maxH = CFG.UPSCALE * 30;
+  const minH = k * 5;
+  const maxH = k * 30;
   const rows = rawRows.filter(r => r.h >= minH && r.h <= maxH);
   const droppedRows = rawRows.filter(r => r.h < minH || r.h > maxH);
   const medH = medianRowHeight(rows);
 
   const surf = {
-    src, rgb, gray, bin, rawBin, W, H,
+    src, rgb, gray, grayClean, bin, W, H, scale: k,
     rows, rawRows, droppedRows, medH, thr, shadedBands,
     rulesRemoved: stripped.removed, downscaled,
   };
@@ -99,11 +128,11 @@ function measureGlyphWidth(surf) {
     for (const s of findSegmentsRaw(vP, 1)) widths.push(s.w);
     if (widths.length > 900) break;
   }
-  if (!widths.length) return CFG.UPSCALE * 5;
+  if (!widths.length) return surf.scale * 5;
   widths.sort((a, b) => a - b);
   /* The 65th percentile, not the median: commas, periods and '1' pull the
    * median below a representative letter. */
-  return Math.max(CFG.UPSCALE * 2, widths[Math.floor(widths.length * 0.65)]);
+  return Math.max(surf.scale * 2, widths[Math.floor(widths.length * 0.65)]);
 }
 
 /* -------------------------------------------------------------------- */
@@ -112,7 +141,7 @@ function measureGlyphWidth(surf) {
 
 /** Split one row band into tokens: glyph groups separated by a cell-sized gap. */
 function extractTokens(surf, row, gapOverride) {
-  const minSegW = Math.max(2, Math.floor(CFG.MIN_DIGIT_W_SRC * CFG.UPSCALE / 2));
+  const minSegW = Math.max(2, Math.floor(CFG.MIN_DIGIT_W_SRC * surf.scale / 2));
   const maxSegW = Math.max(12, Math.round(surf.glyphW * CFG.GLYPH_SPLIT_RATIO));
   const vP = vProjection(surf.bin, surf.W, row.y, row.h);
   let segs = findSegmentsRaw(vP, 1);
@@ -125,7 +154,7 @@ function extractTokens(surf, row, gapOverride) {
   }
   if (!boxed.length) return [];
 
-  const gap = gapOverride || Math.max(2 * CFG.UPSCALE,
+  const gap = gapOverride || Math.max(2 * surf.scale,
     Math.round(surf.glyphW * CFG.TOKEN_GAP_GLYPHS));
 
   const groups = [];
@@ -312,24 +341,33 @@ function tokenAt(col, row) {
  * chosen header are discarded, so preferring a lower row over a valid one
  * above it deletes a real listing without a trace.
  */
-function findHeaderRow(surf) {
+function findHeaderRow(surf, knownFont) {
   if (surf.rows.length < 3) return null;
 
-  const labels = HEADER_LABELS.map(h => h.text);
   const candidates = [];
-  for (const l of labels) candidates.push(l, l + '▲', l + '▼');
+  for (const h of HEADER_LABELS) {
+    candidates.push(h.text);
+    /* A sort arrow is drawn on whichever column the grid is sorted by. Only
+     * the columns we act on are worth doubling the candidate set for. */
+    if (ANCHOR_HEADER_ROLES.includes(h.role)) candidates.push(h.text + '▲', h.text + '▼');
+  }
 
   const limit = Math.min(CFG.HEADER_MAX_ROWS, surf.rows.length - 1);
   for (let i = 0; i < limit; i++) {
     const row = surf.rows[i];
     const tokens = extractTokens(surf, row,
-      Math.max(3 * CFG.UPSCALE, Math.round(surf.glyphW * 1.35)));
+      Math.max(3 * surf.scale, Math.round(surf.glyphW * 1.35)));
     if (tokens.length < CFG.HEADER_MIN_LABELS) continue;
 
-    const rasters = tokens
-      .map(t => rasterizeBox(surf.gray, t.bbox.x, t.bbox.y, t.bbox.w, t.bbox.h))
-      .filter(Boolean);
-    const font = pickFont(rasters, candidates, 'bold').font;
+    /* The font is a property of the screenshot, so it is chosen once — by the
+     * header-band pass if that ran, and only here otherwise. */
+    let font = knownFont;
+    if (!font) {
+      const rasters = tokens
+        .map(t => rasterizeBox(surf.gray, t.bbox.x, t.bbox.y, t.bbox.w, t.bbox.h))
+        .filter(Boolean);
+      font = pickFont(rasters, candidates, 'bold').font;
+    }
 
     const matches = [];
     const seen = new Set();
@@ -377,9 +415,10 @@ function medianOf(values) {
  * List Price, wins the positional fallback outright. The active median then
  * comes back as $1,850, or worse, as a plausible-looking $4,231.
  */
-function scoreColumns(surf, dataRows, cols, bank, uiFont) {
+function scoreColumns(surf, dataRows, cols, bank, uiFont, closedRows, headerRoles) {
   const money = [];
   const integers = [];
+  const closed = closedRows || new Set();
 
   /* Built lazily, and only consulted for cells the reference bank could not
    * read — see fontAdaptedDigitBank. */
@@ -389,6 +428,30 @@ function scoreColumns(surf, dataRows, cols, bank, uiFont) {
     return alt || null;
   };
 
+  /**
+   * Could this column be the concessions column, on geometry alone?
+   *
+   * CONC is populated on closed rows and blank on the rest — the same shape
+   * the sold column has. Asking that question before reading anything is what
+   * lets ~20 columns of a 23-column grid skip classification entirely.
+   */
+  const isConcCandidate = (col) => {
+    if (headerRoles && headerRoles.get(col) === 'conc') return true;
+    if (col.cells.size < CFG.PRICE_COL_MIN_ROWS) return false;
+    if (!closed.size) return false;
+    if (dataRows.length && col.cells.size / dataRows.length >= CFG.DENSE_COL_MIN_FRAC) return false;
+    let blankNonClosed = 0;
+    for (const row of dataRows) if (!col.cells.has(row) && !closed.has(row)) blankNonClosed++;
+    return blankNonClosed >= CFG.SOLD_MIN_BLANK_ROWS;
+  };
+
+  /* The no-currency fallback needs integers too, but only from columns whose
+   * cells actually carry thousands separators. */
+  const couldBeUncurrencedMoney = (cells) => {
+    const withComma = cells.filter(([, t]) => t.commas.length).length;
+    return cells.length >= CFG.PRICE_COL_MIN_ROWS && withComma / cells.length >= 0.9;
+  };
+
   for (const col of cols) {
     const cells = Array.from(col.cells.entries());
     if (cells.length < CFG.PRICE_COL_MIN_ROWS) continue;
@@ -396,10 +459,20 @@ function scoreColumns(surf, dataRows, cols, bank, uiFont) {
     /* Settled once for the column, not per cell — see decideCurrencyPrefix. */
     const currency = decideCurrencyPrefix(surf, cells, bank);
     col.currencyPrefix = currency;
+    const concCandidate = isConcCandidate(col);
 
     const prices = new Map();
     const ints = new Map();
     let rescued = 0;
+
+    /* Reading a cell means normalizing and correlating every one of its glyphs
+     * against the whole template bank, five sub-pixel shifts each. Doing that
+     * for every cell of all twenty-odd columns is what made this slow: a grid
+     * has ~1000 cells and at most three of its columns hold money. So each
+     * column is first asked, from geometry alone, whether it could possibly be
+     * one of the columns we need. */
+    const wantsPrices = currency || couldBeUncurrencedMoney(cells);
+    const wantsIntegers = concCandidate;
 
     for (const [row, token] of cells) {
       const n = token.tall.length;
@@ -411,7 +484,7 @@ function scoreColumns(surf, dataRows, cols, bank, uiFont) {
         }
         if (p) { prices.set(row, p); continue; }
       }
-      if (n >= 1 && n <= 8) {
+      if ((wantsIntegers || wantsPrices) && n >= 1 && n <= 8) {
         let v = readIntegerToken(surf, row, token, bank);
         if (!v && altBank()) {
           v = readIntegerToken(surf, row, token, altBank());
@@ -541,7 +614,7 @@ function bindHeaderRoles(header, cols) {
  * early on a partial header match is how a closed median ends up being a
  * median of asking prices at 95% stated confidence.
  */
-function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols) {
+function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols, closedRows) {
   const result = {
     list: null, orig: null, sold: null, conc: null,
     /* How each role was decided, individually — see the confidence rule below. */
@@ -595,13 +668,11 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols) {
   }
 
   /* --- 2. Sold price by fill pattern against the closed rows --- */
-  const closedRows = new Set();
   let nonClosed = 0;
   for (const row of dataRows) {
     const st = statusByRow.get(row);
     const code = st && st.code ? normalizeStatusCode(st.code) : null;
-    if (code && STATUS_BY_CODE[code] && STATUS_BY_CODE[code].bucket === 'closed') closedRows.add(row);
-    else if (code) nonClosed++;
+    if (code && !closedRows.has(row)) nonClosed++;
   }
 
   if (!result.sold && closedRows.size > 0 && nonClosed > 0) {

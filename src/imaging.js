@@ -164,7 +164,7 @@ function normalizeShadedBands(canvas) {
     else if (inside) { bands.push({ y: sy, h: y - sy }); inside = false; }
   }
 
-  const minH = CFG.SHADE_MIN_BAND_H_SRC * CFG.UPSCALE;
+  const minH = CFG.SHADE_MIN_BAND_H_SRC * workScale();
   const applied = [];
   for (const band of bands) {
     /* Thin bands are rules, borders and underlines, not row highlights. */

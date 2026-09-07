@@ -30,23 +30,21 @@ browser flags either way.
 
 | Bucket | Rows | Price used |
 |---|---|---|
-| Active listings | `ACTV`, `PCHG`, `NEW`, `RACT`, `BOMK`, `AUCT` | List Price |
+| Active listings | `ACTV`, `PCHG`, `NEW`, `TEMP`, `RACT`, `BOMK`, `AUCT` | List Price |
 | Pending sales | `PEND`, `FIN`, `A/I`, `CTGO`, `SS` | List Price |
 | Closed sales | `CLSD` | **Sold Pr** |
-| Not counted | `TEMP`, `EXP`, `CANC`, `RNTD`, `CTGA`, … | — |
+| Not counted | `EXP`, `CANC`, `RNTD`, `CTGA`, `HOLD`, … | — |
 
-`ACTV`, `PCHG`, `FIN`, `PEND` and `CLSD` are mapped as specified by the user;
+`ACTV`, `PCHG`, `TEMP`, `FIN`, `PEND` and `CLSD` are mapped as specified;
 the rest follow MRED Rules & Regulations §2.5 and standard appraisal practice.
 **Every mapping is editable in the app**, and the cards recalculate as you
-change it. The two genuine judgment calls are flagged on screen:
+change it.
 
-- **`TEMP`** (Temporarily No Showings) — listed but un-showable, so it is *not
-  counted* by default. MRED itself excludes TEMP days from Listing Market Time.
-  One click makes it Active if your analysis counts it as supply.
-- **`A/I`** (Attorney Approval / Inspection) — treated as *pending*, because a
-  contract exists at an agreed price, which matches UAD 3.6's "Contract" status
-  and the user's own `FIN = pending` mapping. MRED classes it Active-Contingent;
-  one click moves it.
+`TEMP` counts as an **active listing**: the listing agreement is in force, it is
+not under contract, and it carries a current list price — MRED itself classes it
+Active (MC=A). `A/I` is treated as *pending*, because a contract exists at an
+agreed price, which matches UAD 3.6's "Contract" status; MRED classes it
+Active-Contingent, and one click moves it.
 
 **Median**: the middle value for an odd count, the mean of the two middle values
 for an even one, rounded to the dollar. An empty set reports `—`, never `$0`.
@@ -88,6 +86,21 @@ one**. An appraiser can see a gap; they cannot see a plausible mistake.
 ## How it reads the image
 
 The recognizer knows what connectMLS looks like. It is not general OCR.
+
+It also does what MLS-Extract does about **speed**. MLS-Extract feels instant
+because you hand it one hand-cropped column; run its own code over a full
+23-column grid and it costs a second of preprocessing, same as anything else.
+So the work is split the same way it splits it — locate, crop, then read:
+
+- a **locate pass at source resolution**, which only has to find where the rows
+  and columns are (1.5 megapixels, not 24);
+- a short list of **columns worth reading**, from the header where there is one;
+- those columns **cut out, laid side by side and upscaled 4×** — the original
+  grid with the irrelevant columns deleted, which every stage below then reads
+  at full fidelity.
+
+On the reference grid that is 7 columns of 23, 6.8 megapixels instead of 24.2,
+and about a second from paste to summary.
 
 1. **Preprocess** — upscale 4×, flatten alternating-row and selection shading,
    Otsu threshold, erase table rules. (Ported verbatim from MLS-Extract.)

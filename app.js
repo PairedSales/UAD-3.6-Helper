@@ -415,7 +415,8 @@ function statLine(key, val, emphasize) {
 function renderColumns(result) {
   columnMap.innerHTML = '';
   const roles = result.roles || {};
-  const px = v => Math.round(v / CFG.UPSCALE);
+  const surf = result.surf;
+  const px = v => Math.round(compactToSourceX(surf, v));
 
   const HOW = {
     header: 'named by the header',

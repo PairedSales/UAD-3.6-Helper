@@ -60,10 +60,9 @@ const LISTINGS = ROWS.map((r, i) => {
 
 /* Status → bucket, matching src/vocab.js defaults. */
 const DEFAULT_BUCKET = {
-  NEW: 'active', PCHG: 'active', ACTV: 'active',
+  NEW: 'active', PCHG: 'active', ACTV: 'active', TEMP: 'active',
   FIN: 'pending', 'A/I': 'pending', PEND: 'pending',
   CLSD: 'closed',
-  TEMP: 'excluded',
 };
 
 /** Unrounded median, for ratios. */

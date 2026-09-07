@@ -70,6 +70,9 @@ const STATUS_CODES = [
   { code: 'AUCT', name: 'Auction', bucket: 'active', given: false, ocr: true,
     flag: 'The List Price may be a reserve or opening bid, not an asking price.',
     note: 'Available for showings, marketed by auction.' },
+  { code: 'TEMP', name: 'Temporarily No Showings', bucket: 'active', given: true, ocr: true,
+    note: 'Listing agreement in force and not under contract, but temporarily not showable. ' +
+          'MRED classes it Active (MC=A); it is competing supply with a current list price.' },
   { code: 'PRIV', name: 'Private Listing Network', bucket: 'active', given: false, ocr: false,
     flag: 'No open-market exposure — many appraisers exclude these.',
     note: 'Renders as PRIV-ACTV / PRIV-PEND etc. Excluded from IDX and syndication.' },
@@ -107,10 +110,6 @@ const STATUS_CODES = [
     note: 'Settled sale. Summarized on Sold Pr — never on List Price.' },
 
   /* --- Read, displayed, deliberately not counted --- */
-  { code: 'TEMP', name: 'Temporarily No Showings', bucket: 'excluded', given: false, ocr: true,
-    flag: 'Listed but un-showable. MRED itself excludes TEMP days from Listing ' +
-          'Market Time. Flip to Active if you count it as supply.',
-    note: 'Agreement in force, not under contract, cannot be shown.' },
   { code: 'CTGA', name: 'Contingent on Auction', bucket: 'excluded', given: false, ocr: true,
     note: 'Under contract awaiting auction — the price is not yet a market price.' },
   { code: 'EXP', name: 'Expired', bucket: 'excluded', given: false, ocr: true,

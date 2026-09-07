@@ -75,6 +75,29 @@ of the roles that feed a number, not the best method used for any role — a
 header that matched only "CONC" must not report 95% over two positional guesses.
 Keep it that way, and keep the column map showing provenance per row.
 
+## Locate cheaply, read narrowly
+
+The app never reads off the full page. `src/compact.js` runs a locate pass at
+source resolution, picks the columns worth reading (the header names them when
+there is one), cuts those out and lays them side by side at 4×. Everything
+downstream runs on that compacted surface without knowing it happened.
+
+Two things this makes easy to get wrong:
+
+- **Glyph width is a property of the font, not of the compacted surface.** The
+  compacted grid is almost all digits, which are narrower than letters, so
+  measuring there returns a smaller width and every threshold derived from it
+  splits bold status letters down the middle. It is carried over from the
+  locate pass on purpose.
+- **Rules must be whitened in the pixels, not just the binary.** A rule that
+  was full-span across the page is not full-span once the columns either side
+  are removed, so it survives the crop and reappears as a stray row band.
+  `buildSurface` keeps a `grayClean` canvas for exactly this.
+
+Two surfaces means two working scales, which is why the ported code reads
+`workScale()` instead of `CFG.UPSCALE`. Every one of those was already
+"convert source pixels to working pixels"; only the constant changed.
+
 ## Testing
 
 `npm test` runs everything. `npm run test:stats` is the fast loop — pure

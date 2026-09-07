@@ -104,9 +104,33 @@ async function extractGrid(img, onProgress) {
   step(4, 'Loading templates…');
   const bank = await ensureDigitBank();
 
-  step(12, 'Preprocessing…');
-  const surf = buildSurface(img);
+  /* --- Locate ---------------------------------------------------------
+   * At source resolution. This pass only has to find where the rows and
+   * columns are, which needs no sub-pixel detail; a full grid here is 1.5
+   * megapixels instead of 24. Nothing is read from it. */
+  step(10, 'Finding the columns…');
+  const locate = buildSurface(img, CFG.LOCATE_SCALE);
   const warnings = [];
+
+  if (locate.rows.length >= 2) {
+    for (const row of locate.rows) row.tokens = extractTokens(locate, row);
+    const locateTokens = [];
+    for (const row of locate.rows) locateTokens.push(...row.tokens);
+    locate.columns = groupIntoColumns(locateTokens);
+  } else {
+    locate.columns = [];
+  }
+
+  /* --- Keep only what is worth reading, then upscale that ---------------
+   * The same move MLS-Extract makes when it crops to the MLS # column and
+   * re-analyzes it: everything below runs at full reading fidelity on a
+   * fraction of the pixels. */
+  const headerBand = locate.columns.length ? readHeaderBand(locate) : null;
+  const keep = locate.columns.length ? columnsWorthReading(locate, headerBand) : [];
+
+  step(24, 'Preprocessing…');
+  const surf = keep.length ? buildCompactSurface(locate, keep) : buildSurface(img);
+
   const skipped = {
     noStatusCell: 0, notAListing: 0, clipped: 0, aboveHeader: 0,
     outOfRange: surf.droppedRows.length,
@@ -135,7 +159,7 @@ async function extractGrid(img, onProgress) {
   }
 
   step(22, 'Reading the header…');
-  const header = findHeaderRow(surf);
+  const header = findHeaderRow(surf, headerBand && headerBand.font);
   if (!header) {
     warnings.push({
       level: 'warn',
@@ -176,7 +200,8 @@ async function extractGrid(img, onProgress) {
   const headerRoles = headerRoleMap(header, cols);
 
   step(45, 'Finding the status column…');
-  const statusCol = findStatusColumn(surf, dataRows, cols, headerRoles, bank);
+  const statusCol = findStatusColumn(surf, dataRows, cols, headerRoles, bank,
+    header && header.font);
   let statusByRow = new Map();
   let clusters = [];
   if (statusCol) {
@@ -204,12 +229,24 @@ async function extractGrid(img, onProgress) {
   /* The family the status column resolved in is the family the whole grid is
    * drawn in, so it is what the digit fallback should synthesize. */
   const uiFont = (statusCol && statusCol.font) || (header && header.font) || null;
-  const { money, integers } = scoreColumns(surf, dataRows, cols, bank, uiFont);
+
+  /* Which rows are closed sales. Both the column scorer and the role assigner
+   * key off this: Sold Pr and CONC are the columns populated on exactly these
+   * rows and blank on the others. */
+  const closedRows = new Set();
+  for (const row of dataRows) {
+    const st = statusByRow.get(row);
+    const code = st && st.code ? normalizeStatusCode(st.code) : null;
+    if (code && STATUS_BY_CODE[code] && STATUS_BY_CODE[code].bucket === 'closed') closedRows.add(row);
+  }
+
+  const { money, integers } =
+    scoreColumns(surf, dataRows, cols, bank, uiFont, closedRows, headerRoles);
   console.log(`[Grid] ${money.length} money column(s): ` + money.map(m =>
     `x=${m.col.x0}-${m.col.x1} filled ${(100 * m.fillFrac).toFixed(0)}% median ` +
     `$${m.median.toLocaleString('en-US')}`).join('; '));
 
-  const roles = assignRoles(money, integers, statusByRow, dataRows, header, cols);
+  const roles = assignRoles(money, integers, statusByRow, dataRows, header, cols, closedRows);
   for (const p of roles.problems) warnings.push({ level: 'error', text: p });
   if (roles.confidence < 0.9) {
     warnings.push({

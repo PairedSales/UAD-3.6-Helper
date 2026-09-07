@@ -82,16 +82,17 @@ console.log('\nreport');
     row(3, 'PEND', { listPrice: 250000 }),
     row(4, 'CLSD', { listPrice: 260000, origPrice: 275000, soldPrice: 250000, concessions: 5000 }),
     row(5, 'CLSD', { listPrice: 240000, origPrice: 240000, soldPrice: 240000 }),
-    row(6, 'TEMP', { listPrice: 999999 }),
+    row(6, 'CANC', { listPrice: 999999 }),
   ];
   const r = S.buildReport(rows, S.defaultStatusMapping());
 
   eq('active count', r.summary.active.count, 2);
   eq('active median', r.summary.active.median, 250000);
+  eq('TEMP is an active listing', S.bucketForStatus('TEMP', S.defaultStatusMapping()), 'active');
   eq('pending count', r.summary.pending.count, 1);
   eq('closed count', r.summary.closed.count, 2);
   eq('closed uses the sold price, not the list price', r.summary.closed.high, 250000);
-  eq('TEMP is excluded from every reported bucket', r.summary.excluded.count, 1);
+  eq('a cancelled listing is excluded from every reported bucket', r.summary.excluded.count, 1);
   eq('row accounting balances', r.balanced, true);
   eq('a complete reading is not provisional', r.provisional, false);
   eq('closed ratio median',

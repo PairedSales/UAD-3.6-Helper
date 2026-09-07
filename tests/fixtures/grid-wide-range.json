@@ -263,10 +263,10 @@
   ],
   "expected": {
     "active": {
-      "count": 11,
+      "count": 13,
       "low": 87500,
       "high": 2159200,
-      "median": 250000,
+      "median": 229500,
       "ratio": null
     },
     "pending": {
@@ -289,10 +289,10 @@
       }
     },
     "excluded": {
-      "count": 2,
-      "low": 198500,
-      "high": 229500,
-      "median": 214000,
+      "count": 0,
+      "low": null,
+      "high": null,
+      "median": null,
       "ratio": null
     }
   },
