@@ -9,6 +9,8 @@ Nothing is uploaded. The screenshot is read in your browser, by the same
 deterministic template-matching recognizer as its sibling project
 [MLS-Extract](../MLS-Extract): no OCR engine, no model, no network.
 
+![UAD 3.6 Helper reading a 37-row Dolton search](docs/screenshot.png)
+
 ---
 
 ## Using it
