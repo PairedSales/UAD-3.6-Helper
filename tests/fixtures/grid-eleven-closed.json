@@ -1,0 +1,230 @@
+{
+  "name": "grid-eleven-closed",
+  "listings": [
+    {
+      "n": 1,
+      "mls": "12741305",
+      "stat": "NEW",
+      "list": 189900,
+      "sold": null
+    },
+    {
+      "n": 2,
+      "mls": "12593242",
+      "stat": "PCHG",
+      "list": 189900,
+      "sold": null
+    },
+    {
+      "n": 3,
+      "mls": "12694549",
+      "stat": "ACTV",
+      "list": 201150,
+      "sold": null
+    },
+    {
+      "n": 4,
+      "mls": "12699534",
+      "stat": "ACTV",
+      "list": 205000,
+      "sold": null
+    },
+    {
+      "n": 5,
+      "mls": "12522195",
+      "stat": "ACTV",
+      "list": 220000,
+      "sold": null
+    },
+    {
+      "n": 6,
+      "mls": "12695123",
+      "stat": "ACTV",
+      "list": 244900,
+      "sold": null
+    },
+    {
+      "n": 7,
+      "mls": "12652682",
+      "stat": "ACTV",
+      "list": 250000,
+      "sold": null
+    },
+    {
+      "n": 8,
+      "mls": "12646685",
+      "stat": "ACTV",
+      "list": 250000,
+      "sold": null
+    },
+    {
+      "n": 9,
+      "mls": "12662597",
+      "stat": "ACTV",
+      "list": 259000,
+      "sold": null
+    },
+    {
+      "n": 10,
+      "mls": "12723349",
+      "stat": "ACTV",
+      "list": 260000,
+      "sold": null
+    },
+    {
+      "n": 11,
+      "mls": "12715596",
+      "stat": "ACTV",
+      "list": 269900,
+      "sold": null
+    },
+    {
+      "n": 12,
+      "mls": "12545410",
+      "stat": "TEMP",
+      "list": 198500,
+      "sold": null
+    },
+    {
+      "n": 13,
+      "mls": "12658627",
+      "stat": "TEMP",
+      "list": 229500,
+      "sold": null
+    },
+    {
+      "n": 14,
+      "mls": "12693407",
+      "stat": "FIN",
+      "list": 224900,
+      "sold": null
+    },
+    {
+      "n": 15,
+      "mls": "12738141",
+      "stat": "A/I",
+      "list": 249900,
+      "sold": null
+    },
+    {
+      "n": 16,
+      "mls": "12650118",
+      "stat": "PEND",
+      "list": 188000,
+      "sold": null
+    },
+    {
+      "n": 17,
+      "mls": "12571527",
+      "stat": "CLSD",
+      "list": 174900,
+      "sold": 180000
+    },
+    {
+      "n": 18,
+      "mls": "12374771",
+      "stat": "CLSD",
+      "list": 180000,
+      "sold": 180000
+    },
+    {
+      "n": 19,
+      "mls": "12522236",
+      "stat": "CLSD",
+      "list": 187900,
+      "sold": 181000
+    },
+    {
+      "n": 20,
+      "mls": "12752072",
+      "stat": "CLSD",
+      "list": 185400,
+      "sold": 185400
+    },
+    {
+      "n": 21,
+      "mls": "12678976",
+      "stat": "CLSD",
+      "list": 175900,
+      "sold": 186000
+    },
+    {
+      "n": 22,
+      "mls": "12447138",
+      "stat": "CLSD",
+      "list": 199000,
+      "sold": 199000
+    },
+    {
+      "n": 23,
+      "mls": "12500165",
+      "stat": "CLSD",
+      "list": 204900,
+      "sold": 204900
+    },
+    {
+      "n": 24,
+      "mls": "12742430",
+      "stat": "CLSD",
+      "list": 210000,
+      "sold": 210000
+    },
+    {
+      "n": 25,
+      "mls": "12590975",
+      "stat": "CLSD",
+      "list": 215000,
+      "sold": 215000
+    },
+    {
+      "n": 26,
+      "mls": "12386837",
+      "stat": "CLSD",
+      "list": 217000,
+      "sold": 217000
+    },
+    {
+      "n": 27,
+      "mls": "12476442",
+      "stat": "CLSD",
+      "list": 217500,
+      "sold": 225000
+    }
+  ],
+  "expected": {
+    "active": {
+      "count": 13,
+      "low": 189900,
+      "high": 269900,
+      "median": 229500,
+      "ratio": null
+    },
+    "pending": {
+      "count": 3,
+      "low": 188000,
+      "high": 249900,
+      "median": 224900,
+      "ratio": null
+    },
+    "closed": {
+      "count": 11,
+      "low": 180000,
+      "high": 225000,
+      "median": 199000,
+      "ratio": {
+        "count": 11,
+        "low": 0.7318674447686536,
+        "high": 1.0289655172413794,
+        "median": 0.97
+      }
+    },
+    "excluded": {
+      "count": 0,
+      "low": null,
+      "high": null,
+      "median": null,
+      "ratio": null
+    }
+  },
+  "opts": {}
+}

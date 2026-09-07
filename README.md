@@ -58,6 +58,21 @@ A closed sale with no original list price gets no ratio — the *current* list
 price is not substituted, because a listing reduced twice would report a ratio
 against a number nobody ever offered at.
 
+**Ten or fewer closed sales** and each ratio is quoted individually, comp by
+comp, alongside the median — with a handful of sales the individual ratios are
+the analysis, and a median of six numbers hides more than it summarizes. Comp 1
+is the first closed sale on the screenshot, so a number ties back to its row.
+Past ten, the median stands alone.
+
+```
+Closed sales: 6   Low $180,000   High $199,000   Median $183,200
+   Sale/list ratio, net of concessions: Low 73.187%   High 102.331%   Median 98.500%
+   Comp 1:   100.057%   ($180,000)
+   Comp 2:   89.744%   ($180,000)
+   Comp 3:   73.187%   ($181,000)
+   …
+```
+
 ---
 
 ## What it will not do
@@ -177,6 +192,7 @@ expected numbers cannot drift apart.
 | `grid-hidpi` | A 2× Retina paste gives identical buckets |
 | `grid-clipped-top` / `-bottom` | A sliced row is excluded, not misread |
 | `grid-blank-stat` | A blank Stat cell keeps its listing, and blocks the copy |
+| `grid-few-closed` / `-eleven-closed` | The comp list appears at 10 and not at 11 |
 | `grid-wide-range` | Prices from $87k to $2.1M |
 
 ### Layout

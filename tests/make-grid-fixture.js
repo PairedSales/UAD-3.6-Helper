@@ -337,6 +337,22 @@ const VARIANTS = {
     write('grid-blank-stat', canvas, countable, { blankStat: [blanked], totalRows: LISTINGS.length });
   },
 
+  /* A handful of closed sales — few enough that each ratio is quoted. */
+  'grid-few-closed': () => {
+    const actives = LISTINGS.filter(l => l.stat !== 'CLSD');
+    const closed = LISTINGS.filter(l => l.stat === 'CLSD').slice(0, 6);
+    const rows = actives.concat(closed).map((l, i) => ({ ...l, n: i + 1 }));
+    write('grid-few-closed', renderGrid(rows), rows);
+  },
+
+  /* Exactly one over the line, so the list must NOT appear. */
+  'grid-eleven-closed': () => {
+    const actives = LISTINGS.filter(l => l.stat !== 'CLSD');
+    const closed = LISTINGS.filter(l => l.stat === 'CLSD').slice(0, 11);
+    const rows = actives.concat(closed).map((l, i) => ({ ...l, n: i + 1 }));
+    write('grid-eleven-closed', renderGrid(rows), rows);
+  },
+
   /* A 2× (Retina) screenshot — every upscaled-pixel constant must rescale. */
   'grid-hidpi': () =>
     write('grid-hidpi', renderGrid(LISTINGS, { scale: 2 }), LISTINGS, { scale: 2 }),

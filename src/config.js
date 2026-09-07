@@ -174,6 +174,11 @@ const CFG = {
   CLUSTER_WIDTH_TOL: 0.14,      // Ink-width agreement required before NCC is consulted
   COLOR_CLUSTER_DIST: 42,       // Between the two, colours must agree within this
 
+  /* A small closed-sale set is quoted comp by comp rather than only in
+   * aggregate: with a handful of sales the individual ratios ARE the analysis,
+   * and a median of six numbers hides more than it summarizes. */
+  COMP_LIST_MAX: 10,
+
   /* --- When to stop trusting the result --- */
   UNRESOLVED_PROVISIONAL: 0.10, // Unreadable fraction above which the summary is
                                 // marked provisional and copying is blocked

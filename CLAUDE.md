@@ -98,6 +98,18 @@ Two surfaces means two working scales, which is why the ported code reads
 `workScale()` instead of `CFG.UPSCALE`. Every one of those was already
 "convert source pixels to working pixels"; only the constant changed.
 
+## The comp list
+
+At or below `CFG.COMP_LIST_MAX` closed sales, every sale-to-list ratio is quoted
+individually as well as in aggregate — in the closed card and in the copied
+report text. Two rules that are easy to break:
+
+- **Grid order, not sorted.** Comp 1 must be the first closed sale on the
+  screenshot, or the number cannot be tied back to its row.
+- **Every closed sale gets a line, ratio or not.** A comp missing from a
+  numbered list reads as a comp that did not exist; one with no original list
+  price prints `—` and says why.
+
 ## Testing
 
 `npm test` runs everything. `npm run test:stats` is the fast loop — pure

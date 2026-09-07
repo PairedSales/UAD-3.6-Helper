@@ -134,6 +134,55 @@ console.log('\nprovisional gating');
     S.buildReport(clean, S.defaultStatusMapping()).provisional, false);
 }
 
+console.log('\nper-comp ratios on a small closed set');
+{
+  const closed = (n, over) => row(n, 'CLSD', Object.assign(
+    { origPrice: 200000, soldPrice: 190000, concessions: 0, mls: '1200000' + n }, over));
+  const pcts = (summary) => S.compLines(summary).map(l => {
+    const m = l.match(/([\d.]+)%/);
+    return m ? m[1] + '%' : '—';
+  });
+
+  const six = S.buildReport([1, 2, 3, 4, 5, 6].map(n => closed(n)), S.defaultStatusMapping());
+  const sixText = S.reportAsText(six);
+  eq('six sales are quoted one by one', (sixText.match(/^ +Comp \d+:/gm) || []).length, 6);
+  eq('Comp 1 carries the first sale’s ratio', /^ +Comp 1:\s+95\.000%/m.test(sixText), true);
+  eq('the aggregate line is still there', /Sale\/list ratio/.test(sixText), true);
+
+  const many = n => S.buildReport(
+    Array.from({ length: n }, (_, i) => closed(i + 1)), S.defaultStatusMapping());
+  eq('ten is inside the line', (S.reportAsText(many(10)).match(/^ +Comp /gm) || []).length, 10);
+  eq('eleven is past it — median only',
+    (S.reportAsText(many(11)).match(/^ +Comp /gm) || []).length, 0);
+
+  /* Order is grid order, so Comp N ties back to the row on the screenshot. */
+  const varied = S.buildReport([
+    closed(1, { soldPrice: 250000, origPrice: 250000 }),
+    closed(2, { soldPrice: 180000, origPrice: 200000 }),
+    closed(3, { soldPrice: 210000, origPrice: 200000 }),
+  ], S.defaultStatusMapping());
+  eq('comps are listed in grid order, not sorted by ratio',
+    pcts(varied.summary.closed), ['100.000%', '90.000%', '105.000%']);
+
+  /* A sale with no original list price still gets a numbered line — a comp
+   * missing from a numbered list reads as a comp that did not exist. */
+  const gap = S.buildReport(
+    [closed(1), closed(2, { origPrice: null }), closed(3)], S.defaultStatusMapping());
+  const gapLines = S.compLines(gap.summary.closed);
+  eq('every closed sale gets a line, ratio or not', gapLines.length, 3);
+  eq('the one without an original list price says so',
+    /Comp 2:\s+—\s+\(no original list price\)/.test(gapLines[1]), true);
+
+  const conc = S.buildReport(
+    [closed(1, { soldPrice: 200000, concessions: 6000, origPrice: 200000 })],
+    S.defaultStatusMapping());
+  eq('the per-comp ratio is net of concessions', pcts(conc.summary.closed), ['97.000%']);
+
+  eq('no closed sales means no comp list',
+    S.compLines(S.buildReport([row(1, 'ACTV', { listPrice: 100000 })],
+      S.defaultStatusMapping()).summary.closed).length, 0);
+}
+
 console.log('\noutput');
 {
   const rows = [

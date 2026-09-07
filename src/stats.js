@@ -101,6 +101,15 @@ function summarizeBucket(rows) {
       mean: ratios.reduce((s, v) => s + v, 0) / ratios.length,
     } : null,
     prices: prices.slice().sort((a, b) => a - b),
+    /* Every row of the bucket, in the order it appears in the grid, so a
+     * small set can be quoted one by one. Comp 1 is the first such row on the
+     * screenshot, which is what lets an appraiser tie a number back to it. */
+    items: rows.map((r, i) => ({
+      n: i + 1,
+      mls: r.mls || null,
+      price: typeof r.price === 'number' ? r.price : null,
+      ratio: typeof r.ratio === 'number' ? r.ratio : null,
+    })),
   };
 }
 
@@ -244,6 +253,8 @@ function reportAsText(report) {
         `Median ${formatRatio(s.ratio.median)}` +
         (s.ratio.missing ? `   (${s.ratio.count} of ${s.count} with an original list price)` : '')
       );
+
+      for (const line of compLines(s)) lines.push(line);
     }
   }
 
@@ -259,6 +270,32 @@ function reportAsText(report) {
              'Median of an even count is the mean of the two middle values. ' +
              'Ratio = (sold − concessions) ÷ original list price.');
   return lines.join('\n');
+}
+
+/**
+ * The individual sale-to-list ratios, comp by comp.
+ *
+ * Only for a small set. Past ten sales the list is longer than the analysis it
+ * supports and the median is the honest summary; at or below ten the
+ * individual ratios are what an appraiser actually reasons from, and a median
+ * of six numbers hides more than it tells.
+ *
+ * Every closed sale gets a line, including one with no ratio — a comp missing
+ * from a numbered list would read as a comp that did not exist.
+ */
+function compLines(summary) {
+  if (!summary.ratio) return [];
+  if (summary.count === 0 || summary.count > CFG.COMP_LIST_MAX) return [];
+
+  return summary.items.map(item => {
+    const label = `   Comp ${item.n}:`.padEnd(12);
+    if (item.ratio === null) {
+      return `${label} —   (no original list price` +
+             (item.price === null ? ' or sold price' : '') + ')';
+    }
+    return `${label} ${formatRatio(item.ratio)}` +
+           (item.price !== null ? `   (${formatPrice(item.price)})` : '');
+  });
 }
 
 /** Tab-separated block for pasting into a spreadsheet. */
@@ -287,7 +324,7 @@ function reportAsTsv(report) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    median, medianPrice, formatPrice, formatRatio, saleToListRatio,
+    median, medianPrice, formatPrice, formatRatio, saleToListRatio, compLines,
     summarizeBucket, priceForRow, buildReport, reportAsText, reportAsTsv,
   };
 }

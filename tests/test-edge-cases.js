@@ -126,6 +126,43 @@ const CASES = [
     },
   },
   {
+    name: 'grid-few-closed',
+    title: 'Six closed sales — each ratio quoted, not just the median',
+    run(check, res, truth) {
+      expectExact(check, res, truth, 'few-closed');
+      const comps = res.textOutput.match(/^ +Comp \d+:/gm) || [];
+      check.eq('one line per closed sale', comps.length, res.summary.closed.count);
+      check.ok('the aggregate ratio is still reported',
+        /Sale\/list ratio/.test(res.textOutput));
+      check.ok('the first comp is numbered 1',
+        /^ +Comp 1:/m.test(res.textOutput),
+        res.textOutput.split('\n').slice(0, 8).join(' | '));
+      /* Each quoted ratio must be one the recognizer actually computed. */
+      const quoted = (res.textOutput.match(/^ +Comp \d+:\s+([\d.]+)%/gm) || [])
+        .map(l => parseFloat(l.match(/([\d.]+)%/)[1]) / 100);
+      const r = res.summary.closed.ratio;
+      /* The quoted figures are rounded to three decimals of a percent, so the
+       * comparison has to allow that much slack — half of 0.001% is 5e-6. */
+      const eps = 1e-5;
+      check.ok('every quoted ratio sits inside the reported low/high',
+        quoted.every(v => v >= r.low - eps && v <= r.high + eps),
+        `low ${r.low} high ${r.high} quoted ${quoted.join(', ')}`);
+      check.ok('the lowest and highest quoted ratios ARE the reported low and high',
+        Math.abs(Math.min(...quoted) - r.low) < eps && Math.abs(Math.max(...quoted) - r.high) < eps,
+        `low ${r.low} vs ${Math.min(...quoted)}, high ${r.high} vs ${Math.max(...quoted)}`);
+    },
+  },
+  {
+    name: 'grid-eleven-closed',
+    title: 'Eleven closed sales — one past the line, so the median stands alone',
+    run(check, res, truth) {
+      expectExact(check, res, truth, 'eleven-closed');
+      check.eq('closed count', res.summary.closed.count, 11);
+      check.eq('no per-comp lines', (res.textOutput.match(/^ +Comp /gm) || []).length, 0);
+      check.ok('the aggregate ratio is reported', /Sale\/list ratio/.test(res.textOutput));
+    },
+  },
+  {
     name: 'grid-hidpi',
     title: 'A 2× Retina screenshot — every pixel threshold must rescale',
     run(check, res, truth) {

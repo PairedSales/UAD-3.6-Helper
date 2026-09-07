@@ -417,7 +417,8 @@ function renderSummary(report) {
             statLine('Median', formatRatio(s.ratio.median), true) +
           `</div>` +
           `<div class="stat-card__empty">net of concessions, against original list` +
-          (s.ratio.missing ? ` · ${s.ratio.count} of ${s.count} rows` : '') + `</div>`;
+          (s.ratio.missing ? ` · ${s.ratio.count} of ${s.count} rows` : '') + `</div>` +
+          compListMarkup(s);
       }
 
       if (s.missing > 0) {
@@ -433,6 +434,33 @@ function renderSummary(report) {
     card.innerHTML = html;
     summaryGrid.appendChild(card);
   }
+}
+
+/**
+ * The individual sale-to-list ratios, comp by comp.
+ *
+ * Shown only for a small closed-sale set — see compLines() in stats.js for why
+ * ten is the line. Every closed sale gets a row, including one with no ratio: a
+ * comp missing from a numbered list would read as a comp that did not exist.
+ */
+function compListMarkup(s) {
+  if (!s.ratio || !s.count || s.count > CFG.COMP_LIST_MAX) return '';
+
+  const rows = s.items.map(item => {
+    const value = item.ratio === null
+      ? '<span class="dim">—</span>'
+      : formatRatio(item.ratio);
+    const title = item.ratio === null
+      ? 'No original list price for this sale'
+      : `${formatPrice(item.price)} net of concessions, against the original list price` +
+        (item.mls ? ` · MLS ${item.mls}` : '');
+    return `<div class="stat-line" title="${title}">` +
+           `<span class="stat-line__key">Comp ${item.n}</span>` +
+           `<span class="stat-line__val">${value}</span></div>`;
+  }).join('');
+
+  return `<div class="stat-card__subhead">Each sale</div>` +
+         `<div class="stat-card__stats stat-card__stats--tight">${rows}</div>`;
 }
 
 function statLine(key, val, emphasize) {
