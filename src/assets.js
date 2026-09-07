@@ -6,6 +6,8 @@
 /* canvas when it draws a file:// image, and getImageData() then throws.   */
 /* Data URIs are same-origin everywhere, so the app runs by double-        */
 /* clicking index.html with no server and no browser flags.               */
+/*                                                                        */
+/* Regenerate with: node tests/build-assets.js                            */
 /* ===================================================================== */
 
 const ASSETS = {

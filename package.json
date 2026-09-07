@@ -10,9 +10,16 @@
     "test": "node tests/run-all.js",
     "test:grid": "node tests/test-grid.js",
     "test:stats": "node tests/test-stats.js",
-    "test:edge": "node tests/test-edge-cases.js"
+    "test:edge": "node tests/test-edge-cases.js",
+    "build:assets": "node tests/build-assets.js"
   },
-  "keywords": ["appraisal", "uad", "mls", "ocr", "template-matching"],
+  "keywords": [
+    "appraisal",
+    "uad",
+    "mls",
+    "ocr",
+    "template-matching"
+  ],
   "license": "ISC",
   "devDependencies": {
     "canvas": "^3.2.3",

@@ -111,6 +111,7 @@ The recognizer knows what connectMLS looks like. It is not general OCR.
 ```bash
 npm install          # puppeteer + node-canvas, for the tests only
 npm run fixture:all  # regenerate every fixture PNG and its ground truth
+npm run build:assets # re-inline assets/*.png into src/assets.js
 npm test             # fixtures, statistics, reference grid, edge cases
 ```
 
@@ -120,6 +121,7 @@ npm test             # fixtures, statistics, reference grid, edge cases
 | `npm run test:stats` | Arithmetic only — no browser, ~1s |
 | `npm run test:grid` | The 37-row reference grid, asserted row by row |
 | `npm run test:edge` | Eleven awkward inputs (below) |
+| `npm run build:assets` | Re-inline `assets/*.png` into `src/assets.js` |
 
 ### Fixtures
 
