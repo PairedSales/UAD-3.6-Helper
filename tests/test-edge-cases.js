@@ -30,7 +30,10 @@ const CASES = [
       check.ok('no header was claimed', res.header === false);
       check.ok('sold column still identified', res.roles.hasSold,
         `method was ${res.roles.method}`);
-      check.eq('method', res.roles.method, 'fill-pattern');
+      check.eq('the sold column came from the fill pattern', res.roles.methodBy.sold, 'fill-pattern');
+      check.eq('the list column came from column order', res.roles.methodBy.list, 'position');
+      check.ok('confidence reflects the weaker of the two', res.roles.confidence < 0.8,
+        String(res.roles.confidence));
       check.ok('a low-confidence warning was raised',
         res.warnings.some(w => w.level === 'warn' && /header/i.test(w.text)));
       expectExact(check, res, truth, 'no-header');
@@ -97,6 +100,29 @@ const CASES = [
         res.warnings.some(w => /Orig List Pr/.test(w.text)));
       check.eq('no ratio is produced', res.summary.closed.ratio, null);
       expectExact(check, res, truth, 'narrow');
+    },
+  },
+  {
+    name: 'grid-blank-stat',
+    title: 'One row’s Stat cell is unreadable — the listing must survive as unreadable',
+    run(check, res, truth) {
+      /* The regression this fixture exists for: the row used to be deleted
+       * outright. The summary then reported 20 closed sales with a median
+       * $4,000 low, called itself complete, printed a green "no rows were
+       * dropped", and enabled the copy button. */
+      check.eq('the row is still in the table', res.rows.length, 37);
+      check.eq('its status is unreadable, not guessed', res.unresolved, 1);
+      check.ok('the summary is marked provisional', res.provisional === true);
+      check.ok('no green “no rows were dropped” claim',
+        !res.warnings.some(w => w.level === 'ok' && /no rows were dropped/.test(w.text)),
+        JSON.stringify(res.warnings.filter(w => w.level === 'ok')));
+      check.ok('the unreadable status is reported',
+        res.warnings.some(w => /status/i.test(w.text) && w.level !== 'info'));
+      check.ok('the copied text carries the caveat',
+        /PROVISIONAL/.test(res.textOutput), res.textOutput.split('\n')[0]);
+
+      /* The other 36 rows are still summarized correctly. */
+      expectExact(check, res, truth, 'blank-stat');
     },
   },
   {

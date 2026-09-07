@@ -81,7 +81,41 @@ function requiredMargin(top, second) {
  * bar, because none of them look like a short all-caps code at the right
  * aspect ratio.
  */
-function scoreStatusColumn(surf, dataRows, col, headerRole) {
+/**
+ * Does this column hold numbers?
+ *
+ * Stretched to a fixed raster, a two-digit number correlates alarmingly well
+ * with a two-letter code — nineteen of the integers below 100 match "SS" above
+ * the acceptance bar. So a column whose cells read as digits is disqualified
+ * outright, before any word score is consulted. Days-on-market silently
+ * relabelled as a status moves every row in the grid into one bucket.
+ */
+function columnIsNumeric(surf, col, bank) {
+  const cells = Array.from(col.cells.entries());
+  if (!cells.length) return false;
+  const step = Math.max(1, Math.floor(cells.length / 8));
+
+  let looked = 0, numeric = 0;
+  for (let i = 0; i < cells.length && looked < 8; i += step) {
+    const token = cells[i][1];
+    if (!token.tall.length || token.tall.length > 6) continue;
+    looked++;
+    let allDigits = true;
+    for (const g of token.tall) {
+      const norm = normalizeGlyph(surf.gray, g.x, g.y, g.w, g.h);
+      norm.features = computeStructuralFeatures(norm.binary, CFG.NORM_W, CFG.NORM_H, norm.grayscale);
+      const cls = classifyGlyph(norm, bank);
+      if (!/^[0-9]$/.test(String(cls.digit)) || cls.score < CFG.MIN_DIGIT_SCORE) {
+        allDigits = false;
+        break;
+      }
+    }
+    if (allDigits) numeric++;
+  }
+  return looked >= 2 && numeric / looked >= 0.75;
+}
+
+function scoreStatusColumn(surf, dataRows, col, headerRole, bank) {
   const cells = [];
   for (const [row, token] of col.cells) {
     if (token.tall.length < 1 || token.tall.length > CFG.STATUS_MAX_GLYPHS) continue;
@@ -89,11 +123,21 @@ function scoreStatusColumn(surf, dataRows, col, headerRole) {
     if (raster) cells.push({ token, row, raster });
   }
   if (cells.length < 2) return null;
+  if (bank && headerRole !== 'status' && columnIsNumeric(surf, col, bank)) return null;
 
-  const font = pickFont(cells.map(c => c.raster), RECOGNIZED_TOKENS, CFG.SYNTH_WEIGHT).font;
+  /* Score candidacy on a sample. pickFont is five families × the whole
+   * vocabulary per cell, and running it on every cell of every column is what
+   * made a large grid appear to hang. The winner is re-read in full afterwards. */
+  const step = Math.max(1, Math.floor(cells.length / CFG.STATUS_SAMPLE_CELLS));
+  const sample = [];
+  for (let i = 0; i < cells.length && sample.length < CFG.STATUS_SAMPLE_CELLS; i += step) {
+    sample.push(cells[i]);
+  }
+
+  const font = pickFont(sample.map(c => c.raster), RECOGNIZED_TOKENS, CFG.SYNTH_WEIGHT).font;
 
   let resolved = 0, scoreSum = 0;
-  for (const cell of cells) {
+  for (const cell of sample) {
     const m = matchWord(cell.raster, RECOGNIZED_TOKENS, font, CFG.SYNTH_WEIGHT);
     cell.match = m;
     if (m && m.score >= CFG.STATUS_MIN_SCORE && m.shape >= CFG.STATUS_ABS_SHAPE &&
@@ -103,7 +147,7 @@ function scoreStatusColumn(surf, dataRows, col, headerRole) {
     }
   }
 
-  const resolvedFrac = cells.length ? resolved / cells.length : 0;
+  const resolvedFrac = sample.length ? resolved / sample.length : 0;
   const meanScore = resolved ? scoreSum / resolved : 0;
   const coverage = dataRows.length ? Math.min(1, cells.length / dataRows.length) : 0;
   const headerBonus = headerRole === 'status' ? 0.5 : 0;
@@ -114,12 +158,22 @@ function scoreStatusColumn(surf, dataRows, col, headerRole) {
   };
 }
 
-/** Find the status column. */
-function findStatusColumn(surf, dataRows, cols, headerRoles) {
+/**
+ * Find the status column.
+ *
+ * When the header named one, that column wins outright. Shape evidence alone
+ * is not enough to overrule a label: the failure it guards against — a numeric
+ * column winning and every row inheriting one code — moves the entire grid
+ * into one bucket at once.
+ */
+function findStatusColumn(surf, dataRows, cols, headerRoles, bank) {
   let best = null;
+  let headerNamed = null;
+
   for (const col of cols) {
-    const res = scoreStatusColumn(surf, dataRows, col, headerRoles.get(col));
+    const res = scoreStatusColumn(surf, dataRows, col, headerRoles.get(col), bank);
     if (!res) continue;
+    if (res.headerBonus) headerNamed = res;
     if (res.resolvedFrac > 0 || res.headerBonus) {
       console.log(`[Stat] col ${col.index} x=${col.x0}-${col.x1}: ` +
         `resolved ${(100 * res.resolvedFrac).toFixed(0)}% mean ${res.meanScore.toFixed(2)} ` +
@@ -129,10 +183,16 @@ function findStatusColumn(surf, dataRows, cols, headerRoles) {
     if (!best || res.score > best.score) best = res;
   }
 
+  if (headerNamed && headerNamed !== best) {
+    console.log(`[Stat] col ${best.col.index} outscored the header-named col ` +
+      `${headerNamed.col.index}; keeping the header's choice`);
+    best = headerNamed;
+  }
+
   if (!best) return null;
   if (best.resolvedFrac < CFG.STATUS_BAND_MIN_FRAC) {
     console.log(`[Stat] best column resolved only ${(100 * best.resolvedFrac).toFixed(0)}% ` +
-      `of its cells — below the ${(100 * CFG.STATUS_BAND_MIN_FRAC).toFixed(0)}% bar`);
+      `of its sampled cells — below the ${(100 * CFG.STATUS_BAND_MIN_FRAC).toFixed(0)}% bar`);
     return null;
   }
   return best;
@@ -209,19 +269,25 @@ function labelStatusClusters(clusters, font) {
   for (const cl of clusters) {
     const combined = new Map();
     const shapes = new Map();
+    let voters = 0;
     for (const cell of cl.members) {
       const m = cell.match ||
         (cell.match = matchWord(cell.raster, RECOGNIZED_TOKENS, font, CFG.SYNTH_WEIGHT));
       if (!m) continue;
+      voters++;
       for (const r of m.ranked) {
         combined.set(r.text, (combined.get(r.text) || 0) + r.combined);
         shapes.set(r.text, (shapes.get(r.text) || 0) + r.shape);
       }
     }
 
+    /* Divide by the members that actually voted, not by the cluster size: a
+     * member whose raster produced no match should not drag every candidate's
+     * mean down, because the floors are absolute. */
     const n = cl.members.length;
+    const denom = voters || 1;
     const ranked = Array.from(combined.entries())
-      .map(([text, sum]) => ({ text, mean: sum / n, shape: (shapes.get(text) || 0) / n }))
+      .map(([text, sum]) => ({ text, mean: sum / denom, shape: (shapes.get(text) || 0) / denom }))
       .sort((a, b) => b.mean - a.mean);
 
     cl.ranked = ranked;

@@ -47,6 +47,10 @@ let rows = [];              /* editable working copy */
 let statusMapping = defaultStatusMapping();
 let outputFormat = 'text';
 let lastReport = null;
+/* Bumped on every new image. A run whose token is stale writes nothing: two
+ * pastes in quick succession otherwise leave the slower image's numbers on
+ * screen beside the newer image's preview, with copy enabled. */
+let runToken = 0;
 
 /* ================================================================== */
 /*  Image input                                                        */
@@ -124,6 +128,17 @@ function handleImageFile(file) {
     showStatus('That does not look like an image. Paste a PNG or JPG screenshot.', 'error');
     return;
   }
+
+  /* Corrections are work. A stray Ctrl+V anywhere on the page would otherwise
+   * throw them away silently, and there is no undo. */
+  const edits = rows.filter(r => r.edited || r.omit).length;
+  if (edits > 0 && !window.confirm(
+    `You have corrected ${edits} row${edits === 1 ? '' : 's'} by hand. ` +
+    `Replacing the screenshot discards those corrections. Continue?`)) {
+    return;
+  }
+
+  if (previewImg.src && previewImg.src.startsWith('blob:')) URL.revokeObjectURL(previewImg.src);
   resetResults();
   currentImageBlob = file;
   previewImg.src = URL.createObjectURL(file);
@@ -162,6 +177,10 @@ function resetState() {
 async function runAnalysis() {
   if (!currentImageBlob) return;
 
+  const token = ++runToken;
+  const stale = () => token !== runToken;
+  const blob = currentImageBlob;
+
   extractBtn.disabled = true;
   resetResults();
   clearStatus();
@@ -172,8 +191,10 @@ async function runAnalysis() {
   const t0 = performance.now();
 
   try {
-    const img = await loadImageFromBlob(currentImageBlob);
-    const result = await extractGrid(img, setProgress);
+    const img = await decodeImage(blob);
+    if (stale()) return;
+    const result = await extractGrid(img, (pct, msg) => { if (!stale()) setProgress(pct, msg); });
+    if (stale()) return;
     perf.total = performance.now() - t0;
 
     lastResult = result;
@@ -226,18 +247,44 @@ async function runAnalysis() {
       lastReport.provisional ? 'info' : 'success'
     );
   } catch (err) {
+    if (stale()) return;
     console.error(err);
-    showStatus(`Analysis failed: ${err.message}`, 'error');
+    showStatus(`Analysis failed: ${err.message || 'the image could not be read'}`, 'error');
     setProgress(100, 'Failed');
   } finally {
-    extractBtn.disabled = !currentImageBlob;
-    setTimeout(() => progressWrap.classList.add('hidden'), 900);
+    if (!stale()) {
+      extractBtn.disabled = !currentImageBlob;
+      setTimeout(() => { if (!stale()) progressWrap.classList.add('hidden'); }, 900);
+    }
+  }
+}
+
+/**
+ * Decode a pasted blob into an image.
+ *
+ * loadImageFromBlob rejects with the raw error Event, which surfaces as
+ * "Analysis failed: undefined" and tells the user nothing. It also leaks the
+ * object URL. Both are handled here rather than in the ported module.
+ */
+async function decodeImage(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    return await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(
+        'that image could not be decoded. Paste it as a PNG — some formats ' +
+        '(HEIC, AVIF) and truncated clipboard images cannot be read.'));
+      img.src = url;
+    });
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }
 
 /** Rebuild every derived view from `rows` + `statusMapping`. */
 function recompute() {
-  lastReport = buildReport(rows, statusMapping);
+  lastReport = buildReport(rows, statusMapping, lastResult && lastResult.review);
   renderNotices((lastResult && lastResult.warnings) || []);
   renderSummary(lastReport);
   renderMapping(lastReport);
@@ -257,13 +304,10 @@ function gateCopy(report) {
   copyBtn.disabled = blocked;
   if (!copyNote) return;
   if (blocked) {
-    const bits = [];
-    if (report.unresolved.length) bits.push(`${report.unresolved.length} unreadable status value(s)`);
-    if (report.summary.unclassified.count) {
-      bits.push(`${report.summary.unclassified.count} unrecognized code(s)`);
-    }
-    copyNote.textContent = `Copying is off until the reading is complete — ${bits.join(' and ')} ` +
-      `still need a status in the table below.`;
+    copyNote.textContent =
+      'Copying is off until this reading is complete: ' +
+      report.provisionalReasons.join('; ') +
+      '. Resolve them below, or select the text above by hand — it carries the same caveats.';
     copyNote.classList.remove('hidden');
   } else {
     copyNote.classList.add('hidden');
@@ -373,12 +417,20 @@ function renderColumns(result) {
   const roles = result.roles || {};
   const px = v => Math.round(v / CFG.UPSCALE);
 
-  const line = (label, col, count, extra) => {
+  const HOW = {
+    header: 'named by the header',
+    'fill-pattern': 'inferred from the fill pattern',
+    position: 'inferred from column order — check this',
+  };
+
+  const line = (label, col, count, extra, roleKey) => {
     const row = document.createElement('div');
     row.className = 'column-map__row';
+    const how = roleKey && roles.methodBy ? HOW[roles.methodBy[roleKey]] : null;
     row.innerHTML =
       `<span class="column-map__role">${label}</span>` +
       `<span>${col ? `x ${px(col.x0)}–${px(col.x1)}px, ${count} value(s)` : 'not found'}</span>` +
+      (how ? `<span class="column-map__how">${how}</span>` : '') +
       (extra ? `<span class="column-map__how">${extra}</span>` : '');
     columnMap.appendChild(row);
   };
@@ -388,23 +440,26 @@ function renderColumns(result) {
     result.statusCol ? result.statusCol.cells.length : 0,
     result.statusCol ? `${result.statusClusters.length} distinct code(s)` : '');
   line('List price', roles.list && roles.list.col, roles.list ? roles.list.prices.size : 0,
-    'feeds active + pending');
+    'feeds active + pending', 'list');
   line('Orig list price', roles.orig && roles.orig.col, roles.orig ? roles.orig.prices.size : 0,
-    'denominator of the sale/list ratio');
+    'denominator of the sale/list ratio', 'orig');
   line('Sold price', roles.sold && roles.sold.col, roles.sold ? roles.sold.prices.size : 0,
-    'feeds closed sales');
+    'feeds closed sales', 'sold');
   line('Concessions', roles.conc && roles.conc.col, roles.conc ? roles.conc.values.size : 0,
-    'subtracted from the sold price in the ratio');
+    'subtracted from the sold price in the ratio', 'conc');
   if (result.mlsCol) line('MLS #', result.mlsCol.col, result.mlsCol.values.size, 'duplicate check');
 
-  const how = {
-    header: 'Money columns were read from the grid’s own header row.',
-    'fill-pattern': 'No header label was matched for every role; the sold-price column was ' +
-                    'identified because it is populated exactly on the closed rows.',
-    position: 'No header and no closed sales to key off — columns were taken in connectMLS’s ' +
-              'default order. Check these against your screenshot before using the numbers.',
+  const summary = {
+    header: 'Every money column was named by the grid’s own header row.',
+    'fill-pattern': 'At least one money column was identified from the data rather than a header ' +
+                    'label — check the assignment below.',
+    position: 'At least one money column was taken from connectMLS’s default column order, with ' +
+              'no header label and no fill pattern to confirm it. Check it against your ' +
+              'screenshot before using the numbers.',
   };
-  columnsNote.textContent = (how[roles.method] || 'Columns could not be identified.') +
+  columnsNote.textContent =
+    (summary[roles.method] || 'Columns could not be identified.') +
+    ` Confidence ${(100 * (roles.confidence || 0)).toFixed(0)}%.` +
     (roles.notes && roles.notes.length ? ' ' + roles.notes.join(' ') : '');
 }
 
@@ -520,7 +575,7 @@ function renderReview(report) {
     }
     sel.addEventListener('change', () => {
       row.status = sel.value || null;
-      row.edited = row.status !== row.original.status;
+      markEdited(row);
       recompute();
     });
     stTd.appendChild(sel);
@@ -582,6 +637,12 @@ function renderReview(report) {
   }
 }
 
+/** One place decides whether a row carries a hand correction. */
+function markEdited(row) {
+  row.edited = ['status', 'listPrice', 'origPrice', 'soldPrice', 'concessions']
+    .some(k => row[k] !== row.original[k]);
+}
+
 /** Find the report entry produced for a given source row. */
 function findReportEntry(report, row) {
   for (const id of Object.keys(report.buckets)) {
@@ -607,15 +668,51 @@ function priceCell(row, key) {
   input.value = row[key] != null ? Number(row[key]).toLocaleString('en-US') : '';
   input.placeholder = '—';
   input.addEventListener('change', () => {
-    const digits = input.value.replace(/[^0-9]/g, '');
-    row[key] = digits ? parseInt(digits, 10) : null;
+    const parsed = parseMoneyInput(input.value);
+    if (parsed.error) {
+      input.classList.add('is-invalid');
+      input.title = parsed.error;
+      showStatus(parsed.error, 'error');
+      return;                       /* keep what the user typed so they can fix it */
+    }
+    input.classList.remove('is-invalid');
+    input.title = '';
+    row[key] = parsed.value;
     input.value = row[key] != null ? Number(row[key]).toLocaleString('en-US') : '';
-    row.edited = ['status', 'listPrice', 'origPrice', 'soldPrice', 'concessions']
-      .some(k => row[k] !== row.original[k]);
+    markEdited(row);
     recompute();
   });
   td.appendChild(input);
   return td;
+}
+
+/**
+ * Parse a typed or pasted price.
+ *
+ * connectMLS copies prices as "$425,000.00". Stripping every non-digit turns
+ * that into 42,500,000 — a hundredfold error that changes a bucket's high with
+ * nothing on screen to suggest anything went wrong. The cents are dropped, and
+ * the same magnitude bounds the recognizer applies are applied here.
+ */
+function parseMoneyInput(raw) {
+  const text = String(raw).trim();
+  if (!text) return { value: null };
+
+  const cleaned = text.replace(/[s$,]/g, '');
+  if (!/^d+(.d+)?$/.test(cleaned)) {
+    return { error: `"${text}" is not a price. Enter digits, e.g. 425000.` };
+  }
+
+  const value = Math.round(parseFloat(cleaned));
+  if (!isFinite(value)) return { error: `"${text}" is not a price.` };
+  if (value < CFG.PRICE_MIN_VALUE || value > CFG.PRICE_MAX_VALUE) {
+    return {
+      error: `${formatPrice(value)} is outside the range this tool accepts ` +
+             `(${formatPrice(CFG.PRICE_MIN_VALUE)}–${formatPrice(CFG.PRICE_MAX_VALUE)}). ` +
+             `Check for a stray digit or a pasted cents value.`,
+    };
+  }
+  return { value };
 }
 
 function renderOutput() {

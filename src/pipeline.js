@@ -107,7 +107,10 @@ async function extractGrid(img, onProgress) {
   step(12, 'Preprocessing…');
   const surf = buildSurface(img);
   const warnings = [];
-  const skipped = { noStatusCell: 0, clipped: 0, aboveHeader: 0, outOfRange: surf.droppedRows.length };
+  const skipped = {
+    noStatusCell: 0, notAListing: 0, clipped: 0, aboveHeader: 0,
+    outOfRange: surf.droppedRows.length,
+  };
 
   if (surf.downscaled) {
     warnings.push({
@@ -173,7 +176,7 @@ async function extractGrid(img, onProgress) {
   const headerRoles = headerRoleMap(header, cols);
 
   step(45, 'Finding the status column…');
-  const statusCol = findStatusColumn(surf, dataRows, cols, headerRoles);
+  const statusCol = findStatusColumn(surf, dataRows, cols, headerRoles, bank);
   let statusByRow = new Map();
   let clusters = [];
   if (statusCol) {
@@ -244,8 +247,22 @@ async function extractGrid(img, onProgress) {
   };
 
   for (const row of dataRows) {
-    if (statusCol && !tokenAt(statusCol.col, row)) { skipped.noStatusCell++; continue; }
     const st = statusByRow.get(row);
+    const hasStatusCell = statusCol ? !!tokenAt(statusCol.col, row) : false;
+
+    /* A band is discarded ONLY when nothing about it says "listing". A missing
+     * status cell alone is not enough: a row with a row number, an MLS number
+     * and a sold price is unmistakably a sale whose Stat glyph simply did not
+     * survive, and dropping it removes a real sale from the median with no
+     * trace. Those rows come through with status null, land in `unresolved`,
+     * appear in the review table, and trip the provisional gate. */
+    if (!hasStatusCell) {
+      const hasMoney = ['list', 'orig', 'sold'].some(r => roles[r] && roles[r].prices.has(row));
+      const hasMls = !!(mlsCol && mlsCol.values.has(row));
+      const hasIndex = !!(indexCol && indexCol.numbers.has(row));
+      if (!hasMoney && !hasMls && !hasIndex) { skipped.notAListing++; continue; }
+      skipped.noStatusCell++;
+    }
 
     rows.push({
       y: row.y,
@@ -269,34 +286,18 @@ async function extractGrid(img, onProgress) {
   }
 
   /* ---- Completeness and sanity checks ---- */
-  if (skipped.noStatusCell) {
+  if (skipped.notAListing) {
     warnings.push({
       level: 'info',
-      text: `${skipped.noStatusCell} row band(s) had no status cell and were not treated as ` +
-            `listings (page chrome, a totals line, or a blank row).`,
+      text: `${skipped.notAListing} row band(s) carried no status, price, MLS number or row number ` +
+            `and were treated as page chrome rather than listings.`,
     });
   }
-
-  if (indexCol) {
-    if (indexCol.missing.length) {
-      warnings.push({
-        level: 'error',
-        text: `The grid numbers its rows ${indexCol.first}–${indexCol.last}, but ` +
-              `${indexCol.missing.length} of them ` +
-              `(${indexCol.missing.slice(0, 12).join(', ')}${indexCol.missing.length > 12 ? '…' : ''}) ` +
-              `were not read. Those listings are missing from the summary.`,
-      });
-    } else {
-      warnings.push({
-        level: 'ok',
-        text: `Row numbers ${indexCol.first}–${indexCol.last} were all read — no rows were dropped.`,
-      });
-    }
-  } else {
+  if (skipped.outOfRange) {
     warnings.push({
-      level: 'info',
-      text: 'The grid has no readable row-number column, so the app cannot independently confirm ' +
-            'that every row was read. Compare the count below against your search results.',
+      level: 'warn',
+      text: `${skipped.outOfRange} band(s) of ink were too short or too tall to be a table row and ` +
+            `were not read. If your grid has more rows than the count below, re-take the screenshot.`,
     });
   }
 
@@ -304,8 +305,70 @@ async function extractGrid(img, onProgress) {
   if (unreadable) {
     warnings.push({
       level: 'warn',
-      text: `${unreadable} status value(s) could not be read. They are excluded from every count ` +
-            `until you set them in the table below.`,
+      text: `${unreadable} status value(s) could not be read` +
+            (skipped.noStatusCell
+              ? ` (${skipped.noStatusCell} of them had no status cell at all)`
+              : '') +
+            `. Those rows are listed below and are excluded from every count until you set a ` +
+            `status for them.`,
+    });
+  }
+
+  /* The row-number cross-check.
+   *
+   * It has to be computed against the rows that actually reached the report,
+   * not against the bands the reader started from — otherwise a row lost
+   * anywhere downstream still has its number counted, and the check certifies
+   * the very loss it exists to catch. A number that could not be READ is a
+   * different thing from a listing that is ABSENT, and they are reported
+   * separately: only the second means a sale is missing from the median. */
+  const dropped = skipped.notAListing + skipped.clipped +
+                  skipped.outOfRange + skipped.aboveHeader;
+
+  if (indexCol) {
+    const got = new Set(rows.map(r => r.index).filter(v => v !== null && v !== undefined));
+    const unnumbered = rows.filter(r => r.index === null || r.index === undefined).length;
+    const gaps = [];
+    for (let v = indexCol.first; v <= indexCol.last; v++) if (!got.has(v)) gaps.push(v);
+    const absent = Math.max(0, gaps.length - unnumbered);
+
+    if (absent > 0) {
+      warnings.push({
+        level: 'error',
+        text: `The grid numbers its rows ${indexCol.first}–${indexCol.last}, but ${absent} of them ` +
+              `${gaps.length === absent
+                ? `(${gaps.slice(0, 12).join(', ')}${gaps.length > 12 ? '…' : ''}) `
+                : ''}` +
+              `are missing from the summary below. Those listings are not in any count.`,
+      });
+    } else if (gaps.length) {
+      warnings.push({
+        level: 'info',
+        text: `${gaps.length} row number(s) could not be read, but every row band was. No listing ` +
+              `is missing.`,
+      });
+    }
+
+    if (indexCol.first > 1) {
+      warnings.push({
+        level: 'warn',
+        text: `The grid numbers its rows from ${indexCol.first}, not 1. If this is the first page ` +
+              `of your results, rows 1–${indexCol.first - 1} are above the top of the screenshot ` +
+              `and are not in this summary.`,
+      });
+    }
+
+    if (!absent && !gaps.length && indexCol.first === 1 && !dropped && !unreadable) {
+      warnings.push({
+        level: 'ok',
+        text: `Row numbers 1–${indexCol.last} were all read — no rows were dropped.`,
+      });
+    }
+  } else {
+    warnings.push({
+      level: 'info',
+      text: 'The grid has no readable row-number column, so the app cannot independently confirm ' +
+            'that every row was read. Compare the count below against your search results.',
     });
   }
 
@@ -333,8 +396,22 @@ async function extractGrid(img, onProgress) {
   }
 
   step(95, 'Summarizing…');
+
+  /* Everything buildReport needs in order to decide whether this reading may
+   * be copied. Without it the gate can only see unreadable statuses, and a
+   * summary the app has itself flagged with an error reaches the clipboard
+   * carrying no sign of it. */
+  const review = {
+    errors: warnings.filter(w => w.level === 'error').length,
+    warns: warnings.filter(w => w.level === 'warn').length,
+    droppedRows: dropped,
+    roleProblems: roles.problems.length,
+    confidence: roles.confidence,
+    noStatusColumn: !statusCol,
+  };
+
   return {
-    surf, rows, warnings, skipped,
+    surf, rows, warnings, skipped, review,
     header, cols, statusCol, statusClusters: clusters,
     money, integers, roles, mlsCol, indexCol,
     dataRowCount: dataRows.length,

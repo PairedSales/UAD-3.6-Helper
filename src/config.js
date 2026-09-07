@@ -107,10 +107,16 @@ const CFG = {
                                 // marks a value as a split-token artefact
   DENSE_COL_MIN_FRAC: 0.85,     // Populated on this fraction of rows → "always filled"
   SOLD_FILL_MIN_ACC: 0.90,      // Agreement with the closed-row set to name Sold Pr
+  SOLD_MIN_BLANK_ROWS: 3,       // …and it must be BLANK on at least this many non-closed rows.
+                                // Agreement alone is worthless on a closed-heavy grid, where an
+                                // always-filled asking-price column agrees with the closed set
+                                // simply because almost every row is closed.
   SOLD_LIST_RATIO_MIN: 0.5,     // median(sold) must land in this band around
   SOLD_LIST_RATIO_MAX: 1.5,     //   median(list), or the pairing is rejected
   ORIG_GE_LIST_FRAC: 0.60,      // Orig ≥ List on this fraction of rows, else swap
-  CONC_MAX_FRAC_OF_LIST: 0.25,  // A concessions column's median vs the list median
+  CONC_MAX_FRAC_OF_LIST: 0.25,  // A concessions column's median, as a fraction of the sold
+  CONC_MIN_FRAC_OF_LIST: 0.002, //   median — concessions are a few percent, not a rounding
+                                //   error and not a quarter of the price
 
   /* --- Header row --- */
   HEADER_MAX_ROWS: 6,           // Rows from the top that may be the header. A grid
@@ -133,6 +139,9 @@ const CFG = {
   STATUS_ABS_SHAPE: 0.50,       // Absolute floor on raw NCC — an open-set guard, so an
                                 // unknown token is refused rather than named
   STATUS_BAND_MIN_FRAC: 0.55,
+  STATUS_SAMPLE_CELLS: 12,      // Cells scored while judging a column's candidacy. The winner is
+                                // then read in full; scoring every cell of every column is what
+                                // made a 200-row grid appear to hang.
   STATUS_MAX_GLYPHS: 6,
 
   /* --- Clustering status cells ---

@@ -202,6 +202,17 @@ function renderGrid(listings, opts = {}) {
     }
   });
 
+  /* Paint out a Stat cell, leaving the rest of its row intact. A row that
+   * still carries a row number, an MLS number and a sold price is
+   * unmistakably a listing — the app must surface it as unreadable, never
+   * delete it from the summary. */
+  for (const i of (o.blankStat || [])) {
+    const col = use.cols.find(c => c.key === 'stat');
+    if (!col) continue;
+    ctx.fillStyle = (i % 2 === 1) ? SHADE : PAGE;
+    ctx.fillRect(col.x, headerH + i * ROW_PITCH + 2, col.w, ROW_PITCH - 4);
+  }
+
   if (o.grayscale) desaturate(ctx, width, height);
   return canvas;
 }
@@ -315,6 +326,16 @@ const VARIANTS = {
     write('grid-narrow',
       renderGrid(LISTINGS, { columns: ['n', 'mls', 'stat', 'sold', 'list'] }),
       LISTINGS, { columns: ['n', 'mls', 'stat', 'sold', 'list'] }),
+
+  /* One row's Stat cell is blank, but the row is otherwise complete. */
+  'grid-blank-stat': () => {
+    const blanked = LISTINGS.length - 1;                    /* the last row, a CLSD sale */
+    const canvas = renderGrid(LISTINGS, { blankStat: [blanked] });
+    /* Ground truth is what the app may legitimately COUNT: everything except
+     * the row whose status it cannot read. That row must still be listed. */
+    const countable = LISTINGS.filter((_, i) => i !== blanked);
+    write('grid-blank-stat', canvas, countable, { blankStat: [blanked], totalRows: LISTINGS.length });
+  },
 
   /* A 2× (Retina) screenshot — every upscaled-pixel constant must rescale. */
   'grid-hidpi': () =>

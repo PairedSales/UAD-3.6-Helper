@@ -83,6 +83,7 @@ async function analyze(browser, pngPath, opts = {}) {
       })),
       roles: result ? {
         method: result.roles.method,
+        methodBy: result.roles.methodBy,
         confidence: result.roles.confidence,
         notes: result.roles.notes,
         hasList: !!result.roles.list,

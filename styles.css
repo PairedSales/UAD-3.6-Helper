@@ -1016,3 +1016,9 @@ body::before {
   border-radius: 2px;
   height: 24px;
 }
+
+/* An edited field the app refused: kept on screen so the user can fix it. */
+.field.is-invalid {
+  border-color: var(--error);
+  background: var(--error-dim);
+}

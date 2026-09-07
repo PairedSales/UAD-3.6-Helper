@@ -129,7 +129,7 @@ function priceForRow(row, bucketId) {
  * status could not be read land in `unresolved` and are excluded from every
  * statistic — loudly, never silently.
  */
-function buildReport(rows, mapping) {
+function buildReport(rows, mapping, review) {
   const map = mapping || defaultStatusMapping();
   const buckets = { active: [], pending: [], closed: [], excluded: [], unclassified: [] };
   const unresolved = [];
@@ -161,10 +161,39 @@ function buildReport(rows, mapping) {
                     unresolved.length + omitted.length;
 
   const unreadableFrac = rows.length ? unresolved.length / rows.length : 0;
-  const provisional =
-    unreadableFrac > CFG.UNRESOLVED_PROVISIONAL ||
-    (rows.length > 0 && rows.length < CFG.SMALL_GRID_ROWS && unresolved.length > 0) ||
-    buckets.unclassified.length > 0;
+  const r = review || {};
+
+  /* Why the reading may not be copied.
+   *
+   * The gate has to consider everything the pipeline found, not just the
+   * statuses it could not read. A summary the app has already flagged with an
+   * error — a row missing from the numbering, a rejected sold column, a
+   * discarded band — is a summary that must not reach a report unexamined, and
+   * every one of those was previously invisible here. */
+  const reasons = [];
+  /* Any unresolved row at all, not a fraction of them. A listing in no bucket
+   * means the counts are incomplete by construction, and one dropdown in the
+   * table below fixes it — there is no size of grid on which an uncounted sale
+   * is acceptable in a number that goes into an appraisal. */
+  if (unresolved.length) {
+    reasons.push(`${unresolved.length} of ${rows.length} row(s) have no readable status`);
+  }
+  if (buckets.unclassified.length) {
+    reasons.push(`${buckets.unclassified.length} row(s) carry an unrecognized status code`);
+  }
+  if (accounted !== rows.length) reasons.push('the row accounting does not balance');
+  if (r.errors) reasons.push(`${r.errors} unresolved problem(s) reported above`);
+  if (r.droppedRows) reasons.push(`${r.droppedRows} row band(s) could not be read`);
+  if (r.roleProblems) reasons.push('a money column could not be identified');
+  if (r.noStatusColumn) reasons.push('no status column was found');
+  if (typeof r.confidence === 'number' && r.confidence < 0.8) {
+    reasons.push('the money columns were inferred, not read from a header');
+  }
+  for (const id of REPORTED_BUCKETS) {
+    if (summary[id].missing > 0) {
+      reasons.push(`${summary[id].missing} ${id} row(s) have no readable price`);
+    }
+  }
 
   return {
     buckets, summary, unresolved, omitted,
@@ -172,7 +201,8 @@ function buildReport(rows, mapping) {
     counted,
     accounted,
     balanced: accounted === rows.length,
-    provisional,
+    provisional: reasons.length > 0,
+    provisionalReasons: reasons,
     unreadableFrac,
   };
 }
@@ -186,8 +216,12 @@ const REPORT_LABEL = { active: 'Active listings', pending: 'Pending sales', clos
 /** Plain-text block for pasting into a narrative report. */
 function reportAsText(report) {
   const lines = [];
+  /* The caveats travel with the text. Someone who selects and copies this by
+   * hand, bypassing the disabled button, still gets them. */
   if (report.provisional) {
-    lines.push('*** PROVISIONAL — some rows were not read. Review before using. ***', '');
+    lines.push('*** PROVISIONAL — do not use without checking: ***');
+    for (const r of report.provisionalReasons) lines.push(`***   • ${r}`);
+    lines.push('');
   }
 
   for (const id of REPORTED_BUCKETS) {

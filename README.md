@@ -64,10 +64,16 @@ one**. An appraiser can see a gap; they cannot see a plausible mistake.
   contributes nothing to low/high/median, and the card says how many rows the
   prices actually rest on. Its asking price is never substituted.
 - A status that does not clear the recognizer's confidence bar is reported as
-  unreadable, not filed under the nearest guess.
-- If more than 10% of rows are unreadable — or *any* row on a grid under 15 rows
-  — the summary is marked **provisional** and the copy buttons are disabled
-  until you resolve them in the review table.
+  unreadable, not filed under the nearest guess. A row whose Stat cell is blank
+  is **still a listing** — it appears in the table with no status, waiting for
+  you, and is never deleted from the reckoning.
+- **Any** unresolved row marks the summary **provisional**: the copy buttons go
+  off and the text itself carries a `*** PROVISIONAL ***` header listing what is
+  outstanding, so a summary copied by hand still says so. The gate also fires on
+  a rejected money column, a discarded row band, a gap in the row numbering, an
+  unpriced row, or money columns identified only by position.
+- The green "no rows were dropped" tick appears only when the numbering starts
+  at 1, has no gaps, nothing was discarded, and every status was read.
 - Every glyph of every price goes through the confusable-pair guard
   (`0`/`9`, `3`/`5`, `1`/`7`, …). One ambiguous glyph rejects the whole cell.
 - If the grid numbers its rows, those numbers are read back as an independent
@@ -102,9 +108,13 @@ The recognizer knows what connectMLS looks like. It is not general OCR.
    every cell in the column votes on it.
 8. **Roles** — `Stat`, `List Price`, `Orig List Pr`, `Sold Pr` and `CONC` are
    named from the header where there is one. Failing that, the sold column is
-   the money column populated exactly on the closed rows. Cross-checks can still
-   overturn the result: `Orig ≥ List` on most rows, `median(sold)` within half
-   to one-and-a-half times `median(list)`.
+   the money column populated on the closed rows **and blank on the rest** —
+   agreement alone is not evidence, because on a closed-heavy grid an
+   always-filled asking-price column agrees with the closed set simply because
+   almost every row is closed. Cross-checks can still overturn the result:
+   `Orig ≥ List` on most rows, `median(sold)` within half to one-and-a-half
+   times `median(list)`. Each role records **how** it was decided, and the
+   reported confidence is that of the weakest role that feeds a number.
 
 ---
 
@@ -146,6 +156,7 @@ expected numbers cannot drift apart.
 | `grid-narrow` | A crop with no `Orig List Pr` — ratios absent and *said so* |
 | `grid-hidpi` | A 2× Retina paste gives identical buckets |
 | `grid-clipped-top` / `-bottom` | A sliced row is excluded, not misread |
+| `grid-blank-stat` | A blank Stat cell keeps its listing, and blocks the copy |
 | `grid-wide-range` | Prices from $87k to $2.1M |
 
 ### Layout

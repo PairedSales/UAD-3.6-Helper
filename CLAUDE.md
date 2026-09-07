@@ -17,9 +17,20 @@ Concretely, do not undo any of these without a very good reason:
 - `isAmbiguous()` runs on every digit of every price. One ambiguous glyph
   rejects the whole cell. (The currency symbol is exempt — see `price.js`.)
 - Comma grouping is validated on every numeric token, dollar sign or not.
-- Unreadable statuses land in `unresolved`, never in a bucket.
-- Above the provisional threshold, the copy buttons are disabled.
-- Every skipped row increments a named counter that reaches the UI.
+- Unreadable statuses land in `unresolved`, never in a bucket — and a row is
+  only ever DISCARDED when it has no status, no price, no MLS number and no row
+  number. Anything less and it is a listing whose Stat glyph did not survive.
+- Any unresolved row makes the report provisional and disables copy. The
+  provisional banner is written into the copied text too, so select-and-copy
+  cannot escape it.
+- Every skipped row increments a named counter that reaches the UI, and the
+  green "no rows were dropped" tick is gated on all of them being zero.
+- The row-number cross-check compares against the rows that reached the REPORT,
+  never against the bands the reader started from. Comparing against the latter
+  is how the check certifies the very loss it exists to catch.
+- A money column is bound to a role only on positive evidence. "Agrees with the
+  closed rows" is not positive evidence on a grid that is nearly all closed;
+  "blank on the rows that are not closed" is.
 
 ## Ported code — do not tune locally
 
@@ -55,6 +66,14 @@ Both are load-bearing and both look like they should be per-cell:
    cluster. The three-branch merge rule matters: colour must never *veto* a
    merge of two near-identical bitmaps (row shading moves anti-aliased ink a few
    RGB points), and must never *cause* one between different shapes.
+
+## Confidence is per role
+
+`roles.methodBy` records how each of list / orig / sold / conc was decided
+(`header`, `fill-pattern`, `position`). The reported confidence is the WEAKEST
+of the roles that feed a number, not the best method used for any role — a
+header that matched only "CONC" must not report 95% over two positional guesses.
+Keep it that way, and keep the column map showing provenance per row.
 
 ## Testing
 

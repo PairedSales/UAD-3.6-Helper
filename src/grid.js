@@ -461,12 +461,21 @@ function scoreColumns(surf, dataRows, cols, bank, uiFont) {
      * rather than letting it become the bucket low. */
     const lens = Array.from(prices.values()).map(p => p.digits.length);
     const medLen = medianOf(lens);
-    let outliers = 0;
+    /* A token that split at a comma comes back SHORT — "$1,085,000" read as
+     * "$1,085". A genuinely large sale in a modest column comes back long, and
+     * dropping it would silently remove the market's high sale. So only short
+     * values are treated as artefacts, and they are reported. */
+    const outlierRows = [];
     for (const [row, p] of Array.from(prices.entries())) {
-      if (Math.abs(p.digits.length - medLen) >= CFG.PRICE_DIGIT_SPREAD) {
+      if (medLen - p.digits.length >= CFG.PRICE_DIGIT_SPREAD) {
         prices.delete(row);
-        outliers++;
+        outlierRows.push(p.value);
       }
+    }
+    const outliers = outlierRows.length;
+    if (outliers) {
+      console.log(`[Money] col ${col.index}: dropped ${outliers} short value(s) ` +
+        `(${outlierRows.join(', ')}) against a ${medLen}-digit column`);
     }
 
     const median = medianOf(Array.from(prices.values()).map(p => p.value));
@@ -535,6 +544,8 @@ function bindHeaderRoles(header, cols) {
 function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols) {
   const result = {
     list: null, orig: null, sold: null, conc: null,
+    /* How each role was decided, individually — see the confidence rule below. */
+    methodBy: {},
     method: null, confidence: 0, notes: [], problems: [],
   };
 
@@ -573,10 +584,10 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols) {
   if (header) {
     for (const role of ['list', 'sold', 'orig']) {
       const hit = pick(role, money);
-      if (hit) { result[role] = hit; found.push(role); }
+      if (hit) { result[role] = hit; result.methodBy[role] = 'header'; found.push(role); }
     }
     const conc = pick('conc', integers);
-    if (conc) { result.conc = conc; found.push('conc'); }
+    if (conc) { result.conc = conc; result.methodBy.conc = 'header'; found.push('conc'); }
     if (found.length) {
       result.method = 'header';
       result.notes.push(`Read from the header row: ${found.join(', ')}.`);
@@ -597,16 +608,37 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols) {
     let best = null;
     for (const m of money) {
       if (m === result.list || m === result.orig) continue;
-      let agree = 0;
-      for (const row of dataRows) if (m.prices.has(row) === closedRows.has(row)) agree++;
+
+      /* Agreement alone is not evidence. On a grid that is almost all closed
+       * sales, an always-populated asking-price column agrees with the closed
+       * set on nearly every row simply because nearly every row IS closed —
+       * and binding it here puts list prices into the sold median, which is
+       * the exact substitution this app exists to prevent. A sold column must
+       * be positively BLANK on the rows that are not closed. */
+      let agree = 0, blankOnNonClosed = 0;
+      for (const row of dataRows) {
+        const has = m.prices.has(row);
+        const isClosed = closedRows.has(row);
+        if (has === isClosed) agree++;
+        if (!has && !isClosed) blankOnNonClosed++;
+      }
       const acc = dataRows.length ? agree / dataRows.length : 0;
-      if (!best || acc > best.acc) best = { m, acc };
+      if (m.fillFrac >= CFG.DENSE_COL_MIN_FRAC) continue;
+      if (blankOnNonClosed < CFG.SOLD_MIN_BLANK_ROWS) continue;
+      if (!best || acc > best.acc) best = { m, acc, blankOnNonClosed };
     }
     if (best && best.acc >= CFG.SOLD_FILL_MIN_ACC) {
       result.sold = best.m;
+      result.methodBy.sold = 'fill-pattern';
       result.notes.push(`Sold price identified by its fill pattern ` +
-        `(${(100 * best.acc).toFixed(0)}% agreement with the closed rows).`);
+        `(${(100 * best.acc).toFixed(0)}% agreement with the closed rows, and empty on ` +
+        `${best.blankOnNonClosed} row(s) that are not closed).`);
       if (!result.method) result.method = 'fill-pattern';
+    } else if (closedRows.size >= 3) {
+      result.problems.push(
+        'No column behaves like a sold-price column — none is populated on the closed rows and ' +
+        'empty on the rest. Closed sales cannot be summarized without one.'
+      );
     }
   }
 
@@ -618,6 +650,7 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols) {
     const avail = dense.filter(m => m !== result.orig);
     if (avail.length) {
       result.list = avail[avail.length - 1];       /* rightmost */
+      result.methodBy.list = 'position';
       if (avail.length > 1) {
         result.notes.push(`${avail.length} money columns are populated on every row; ` +
           `took the rightmost as "List Price" (connectMLS places "Orig List Pr" to its left).`);
@@ -625,38 +658,54 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols) {
       if (!result.method) result.method = 'position';
     } else {
       const rest = money.filter(m => m !== result.sold);
-      if (rest.length) { result.list = rest[rest.length - 1]; result.method = result.method || 'position'; }
+      if (rest.length) {
+        result.list = rest[rest.length - 1];
+        result.methodBy.list = 'position';
+        result.method = result.method || 'position';
+      }
     }
   }
 
   if (!result.orig) {
     const avail = dense.filter(m => m !== result.list);
-    if (avail.length) result.orig = avail[avail.length - 1];
+    if (avail.length) { result.orig = avail[avail.length - 1]; result.methodBy.orig = 'position'; }
   }
 
   /* --- 4. Concessions: a small integer column filled only on closed rows --- */
   if (!result.conc && closedRows.size > 0) {
-    const listMedian = result.list ? result.list.median : null;
+    const soldMedian = result.sold ? result.sold.median : (result.list ? result.list.median : null);
     let best = null;
     for (const m of integers) {
       if (m.col === (result.list && result.list.col) ||
           m.col === (result.orig && result.orig.col) ||
           m.col === (result.sold && result.sold.col)) continue;
-      let agree = 0, populated = 0;
+
+      /* Same trap as the sold column, and worse: a concessions column that is
+       * actually Street # or ASF puts the wrong quantity into every ratio, to
+       * three decimal places. It must be EMPTY on rows that are not closed —
+       * an always-populated column is not concessions no matter how it scores. */
+      let agree = 0, populated = 0, blankOnNonClosed = 0;
       for (const row of dataRows) {
         const has = m.values.has(row);
         if (has) populated++;
-        if (has && !closedRows.has(row)) agree -= 2;      /* filled on a non-closed row */
+        if (has && !closedRows.has(row)) agree -= 2;
         else if (has) agree += 1;
+        else if (!closedRows.has(row)) blankOnNonClosed++;
       }
       if (populated < 2) continue;
-      if (listMedian && m.median > listMedian * CFG.CONC_MAX_FRAC_OF_LIST) continue;
+      if (m.fillFrac >= CFG.DENSE_COL_MIN_FRAC) continue;
+      if (blankOnNonClosed < CFG.SOLD_MIN_BLANK_ROWS) continue;
+      /* Concessions are a few percent of the price, not a fraction of a percent
+       * and not a quarter of it. */
+      if (soldMedian && (m.median > soldMedian * CFG.CONC_MAX_FRAC_OF_LIST ||
+                         m.median < soldMedian * CFG.CONC_MIN_FRAC_OF_LIST)) continue;
       if (!best || agree > best.agree) best = { m, agree };
     }
     if (best && best.agree > 0) {
       result.conc = best.m;
-      result.notes.push('Concessions identified as the small whole-number column ' +
-        'populated only on closed rows.');
+      result.methodBy.conc = 'fill-pattern';
+      result.notes.push('Concessions identified as the small whole-number column populated only ' +
+        'on closed rows.');
     }
   }
 
@@ -672,13 +721,27 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols) {
     if (!r.values) r.values = r.prices;
   }
 
-  if (!result.confidence) {
-    const base = { header: 0.95, 'fill-pattern': 0.75, position: 0.45 }[result.method] || 0.3;
-    /* A confidence figure that ignores a missing role is worse than none: it
-     * is exactly what suppresses the warning the user needed. */
-    const missing = (result.list ? 0 : 1) + (result.sold ? 0 : 1);
-    result.confidence = Math.max(0.25, base - missing * 0.25 - result.problems.length * 0.2);
+  /* Confidence is the confidence of the WEAKEST role that feeds a number, not
+   * of the best method used for any role. A header that matched "CONC" and
+   * nothing else would otherwise report 95% while the list and sold columns
+   * were positional guesses — full stated confidence over an invented answer. */
+  const STRENGTH = { header: 0.95, 'fill-pattern': 0.75, position: 0.45 };
+  const feeding = ['list', 'sold'];
+  let weakest = 0.95;
+  for (const role of feeding) {
+    if (!result[role]) { weakest = Math.min(weakest, 0.2); continue; }
+    weakest = Math.min(weakest, STRENGTH[result.methodBy[role]] || 0.45);
   }
+  result.confidence = Math.max(0.2, weakest - result.problems.length * 0.2);
+
+  /* One headline word for a decision made per role: report the weakest, since
+   * that is what the confidence figure means and what the user should check. */
+  const ORDER = ['position', 'fill-pattern', 'header'];
+  const used = feeding.map(r => result.methodBy[r]).filter(Boolean);
+  result.method = used.length
+    ? used.reduce((a, b) => (ORDER.indexOf(a) <= ORDER.indexOf(b) ? a : b))
+    : (result.methodBy.orig || result.methodBy.conc || null);
+
   return result;
 }
 
@@ -705,6 +768,9 @@ function runRoleCrossChecks(result, dataRows) {
     if (decided >= 3 && listHigher / decided > CFG.ORIG_GE_LIST_FRAC) {
       result.orig = list;
       result.list = orig;
+      const m = result.methodBy.list;
+      result.methodBy.list = result.methodBy.orig;
+      result.methodBy.orig = m;
       result.notes.push('Swapped the two always-populated money columns: the left one held ' +
         'the LOWER price on most rows, which is the current list price, not the original.');
     }
@@ -720,6 +786,7 @@ function runRoleCrossChecks(result, dataRows) {
         `The sold column was rejected.`
       );
       result.sold = null;
+      delete result.methodBy.sold;
     }
   }
 
@@ -727,6 +794,7 @@ function runRoleCrossChecks(result, dataRows) {
     result.problems.push('The column taken as concessions is too large relative to the sold ' +
       'prices; concessions were not used.');
     result.conc = null;
+    delete result.methodBy.conc;
   }
 }
 
