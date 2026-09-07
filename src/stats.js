@@ -61,7 +61,10 @@ function saleToListRatio(row) {
   if (!(typeof orig === 'number' && orig > 0)) return null;
   const conc = typeof row.concessions === 'number' && row.concessions > 0 ? row.concessions : 0;
   const net = sold - conc;
-  if (!isFinite(net)) return null;
+  /* Concessions at or above the sale price is not a market outcome, it is a
+   * misread — of the concessions, the sold price, or which column is which.
+   * Reporting the resulting negative percentage would look like a finding. */
+  if (!isFinite(net) || net <= 0) return null;
   return net / orig;
 }
 

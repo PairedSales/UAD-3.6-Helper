@@ -59,6 +59,8 @@ eq('the CURRENT list price is not substituted for the original',
   S.saleToListRatio({ soldPrice: 199000, listPrice: 190000, origPrice: null }), null);
 eq('no sold price means no ratio',
   S.saleToListRatio({ soldPrice: null, origPrice: 199000 }), null);
+eq('concessions above the sale price is a misread, not a negative ratio',
+  S.saleToListRatio({ soldPrice: 200000, concessions: 250000, origPrice: 210000 }), null);
 
 /* ---- bucketing ---- */
 console.log('\nbucketing');
