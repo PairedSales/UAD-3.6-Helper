@@ -293,8 +293,7 @@ function compLines(summary) {
       return `${label} —   (no original list price` +
              (item.price === null ? ' or sold price' : '') + ')';
     }
-    return `${label} ${formatRatio(item.ratio)}` +
-           (item.price !== null ? `   (${formatPrice(item.price)})` : '');
+    return `${label} ${formatRatio(item.ratio)}`;
   });
 }
 

@@ -67,9 +67,9 @@ Past ten, the median stands alone.
 ```
 Closed sales: 6   Low $180,000   High $199,000   Median $183,200
    Sale/list ratio, net of concessions: Low 73.187%   High 102.331%   Median 98.500%
-   Comp 1:   100.057%   ($180,000)
-   Comp 2:   89.744%   ($180,000)
-   Comp 3:   73.187%   ($181,000)
+   Comp 1:   100.057%
+   Comp 2:   89.744%
+   Comp 3:   73.187%
    …
 ```
 
