@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UAD 3.6 Helper — Market Activity from a connectMLS Grid</title>
+  <meta name="description" content="Paste a connectMLS search-results screenshot and get active, pending and closed counts with low, high and median prices. Deterministic template matching, entirely in your browser." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- Header -->
+    <header class="app-header">
+      <div class="app-header__icon">📊</div>
+      <h1>UAD 3.6 Helper</h1>
+      <p class="app-header__subtitle">
+        Paste a connectMLS grid → active, pending and closed sales with low, high and median price
+      </p>
+    </header>
+
+    <!-- Input -->
+    <section class="card" id="input-card">
+      <div class="card__title"><span>📷</span> Grid Screenshot</div>
+
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp" />
+        <span class="drop-zone__icon">📋</span>
+        <div class="drop-zone__text">
+          <strong>Ctrl + V</strong> to paste your search results, or click to upload<br />
+          <small>Include the header row and the Stat, List Price and Sold Pr columns</small>
+        </div>
+      </div>
+
+      <div class="preview-wrapper hidden" id="preview-wrapper">
+        <img id="preview-img" alt="Pasted connectMLS grid preview" />
+        <button class="preview-clear" id="clear-btn" title="Clear image" aria-label="Clear image">✕</button>
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn--primary" id="extract-btn" disabled>
+          <span>⚡</span> Analyze Market Activity
+        </button>
+      </div>
+
+      <div class="progress-container hidden" id="progress-container">
+        <div class="progress-label">
+          <span id="progress-msg">Processing…</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-bar__fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="status hidden" id="status-area"></div>
+    </section>
+
+    <!-- Summary -->
+    <section class="card hidden" id="summary-card">
+      <div class="card__title"><span>📈</span> Market Summary</div>
+
+      <div class="notice-list" id="notice-list"></div>
+
+      <div class="summary-grid" id="summary-grid"></div>
+
+      <div class="action-row">
+        <div class="tab-row">
+          <button class="tab is-active" data-format="text">Report text</button>
+          <button class="tab" data-format="tsv">Spreadsheet</button>
+          <button class="tab" data-format="rows">Every row</button>
+        </div>
+        <textarea class="output-box" id="output-box" readonly rows="8"
+                  placeholder="The summary will appear here…"></textarea>
+        <div class="action-row">
+          <button class="btn btn--copy" id="copy-btn" disabled>
+            <span>📋</span> Copy to Clipboard
+          </button>
+          <p class="section-note hidden" id="copy-note" style="margin-top:0.6rem"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Column assignment -->
+    <section class="card hidden" id="columns-card">
+      <div class="card__title"><span>🧭</span> Columns Used</div>
+      <p class="section-note" id="columns-note"></p>
+      <div class="column-map" id="column-map"></div>
+    </section>
+
+    <!-- Status mapping -->
+    <section class="card hidden" id="mapping-card">
+      <div class="card__title debug-toggle" id="mapping-toggle">
+        <span>🗂️</span> Status Mapping
+        <span class="debug-chevron">▸</span>
+      </div>
+      <div class="debug-body hidden" id="mapping-body">
+        <p class="section-note">
+          Codes found in this screenshot are highlighted. <code>ACTV</code>, <code>PCHG</code>,
+          <code>FIN</code>, <code>PEND</code> and <code>CLSD</code> are mapped as you specified;
+          the rest use standard appraisal practice and can be changed here. Every card and table
+          below updates immediately.
+        </p>
+        <div class="mapping-grid" id="mapping-grid"></div>
+        <div class="action-row">
+          <button class="linkish" id="mapping-reset">Reset to defaults</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Per-row review -->
+    <section class="card hidden" id="review-card">
+      <div class="card__title"><span>🔎</span> Listings Read <span id="review-count"></span></div>
+      <p class="section-note">
+        Every row the screenshot contained. Correct anything that was misread — the summary
+        recalculates as you type. Untick a row to leave it out entirely.
+        <strong>Sale&nbsp;/&nbsp;list</strong> is
+        <code>(sold price − concessions) ÷ original list price</code>, shown for closed sales.
+      </p>
+      <div class="review-scroll">
+        <table class="review-table" id="review-table">
+          <thead>
+            <tr>
+              <th>Use</th>
+              <th>#</th>
+              <th>MLS&nbsp;#</th>
+              <th>Status</th>
+              <th>Bucket</th>
+              <th>Orig List</th>
+              <th>List Price</th>
+              <th>Sold Price</th>
+              <th>Conc.</th>
+              <th>Counted</th>
+              <th>Sale / List</th>
+              <th>Conf.</th>
+            </tr>
+          </thead>
+          <tbody id="review-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Debug -->
+    <section class="card hidden" id="debug-card">
+      <div class="card__title debug-toggle" id="debug-toggle">
+        <span>🔬</span> Recognition Detail
+        <span class="debug-chevron">▸</span>
+      </div>
+      <div class="debug-body hidden" id="debug-body">
+        <div class="debug-perf" id="debug-perf"></div>
+        <canvas id="debug-canvas"></canvas>
+        <div id="debug-clusters"></div>
+      </div>
+    </section>
+
+    <footer class="app-footer">
+      Deterministic template matching, entirely in your browser — the screenshot never leaves this
+      machine. Recognition core shared with <strong>MLS&nbsp;Extract</strong>.
+    </footer>
+
+  </div>
+
+  <!-- Load order matters only for top-level constants; functions are hoisted. -->
+  <script src="src/config.js"></script>
+  <script src="src/vocab.js"></script>
+  <script src="src/assets.js"></script>
+  <script src="src/imaging.js"></script>
+  <script src="src/segment.js"></script>
+  <script src="src/glyph.js"></script>
+  <script src="src/rules.js"></script>
+  <script src="src/word.js"></script>
+  <script src="src/templates.js"></script>
+  <script src="src/price.js"></script>
+  <script src="src/grid.js"></script>
+  <script src="src/status.js"></script>
+  <script src="src/stats.js"></script>
+  <script src="src/pipeline.js"></script>
+  <script src="src/debug.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

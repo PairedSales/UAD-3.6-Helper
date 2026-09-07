@@ -1,0 +1,188 @@
+{
+  "name": "grid-all-closed",
+  "listings": [
+    {
+      "n": 1,
+      "mls": "12571527",
+      "stat": "CLSD",
+      "list": 174900,
+      "sold": 180000
+    },
+    {
+      "n": 2,
+      "mls": "12374771",
+      "stat": "CLSD",
+      "list": 180000,
+      "sold": 180000
+    },
+    {
+      "n": 3,
+      "mls": "12522236",
+      "stat": "CLSD",
+      "list": 187900,
+      "sold": 181000
+    },
+    {
+      "n": 4,
+      "mls": "12752072",
+      "stat": "CLSD",
+      "list": 185400,
+      "sold": 185400
+    },
+    {
+      "n": 5,
+      "mls": "12678976",
+      "stat": "CLSD",
+      "list": 175900,
+      "sold": 186000
+    },
+    {
+      "n": 6,
+      "mls": "12447138",
+      "stat": "CLSD",
+      "list": 199000,
+      "sold": 199000
+    },
+    {
+      "n": 7,
+      "mls": "12500165",
+      "stat": "CLSD",
+      "list": 204900,
+      "sold": 204900
+    },
+    {
+      "n": 8,
+      "mls": "12742430",
+      "stat": "CLSD",
+      "list": 210000,
+      "sold": 210000
+    },
+    {
+      "n": 9,
+      "mls": "12590975",
+      "stat": "CLSD",
+      "list": 215000,
+      "sold": 215000
+    },
+    {
+      "n": 10,
+      "mls": "12386837",
+      "stat": "CLSD",
+      "list": 217000,
+      "sold": 217000
+    },
+    {
+      "n": 11,
+      "mls": "12476442",
+      "stat": "CLSD",
+      "list": 217500,
+      "sold": 225000
+    },
+    {
+      "n": 12,
+      "mls": "12646154",
+      "stat": "CLSD",
+      "list": 224900,
+      "sold": 232000
+    },
+    {
+      "n": 13,
+      "mls": "12479222",
+      "stat": "CLSD",
+      "list": 229000,
+      "sold": 235000
+    },
+    {
+      "n": 14,
+      "mls": "12627111",
+      "stat": "CLSD",
+      "list": 244000,
+      "sold": 245000
+    },
+    {
+      "n": 15,
+      "mls": "12359892",
+      "stat": "CLSD",
+      "list": 239900,
+      "sold": 246000
+    },
+    {
+      "n": 16,
+      "mls": "12651339",
+      "stat": "CLSD",
+      "list": 260000,
+      "sold": 248000
+    },
+    {
+      "n": 17,
+      "mls": "12583983",
+      "stat": "CLSD",
+      "list": 250000,
+      "sold": 250000
+    },
+    {
+      "n": 18,
+      "mls": "12447136",
+      "stat": "CLSD",
+      "list": 249000,
+      "sold": 251000
+    },
+    {
+      "n": 19,
+      "mls": "12673055",
+      "stat": "CLSD",
+      "list": 269900,
+      "sold": 260000
+    },
+    {
+      "n": 20,
+      "mls": "12598468",
+      "stat": "CLSD",
+      "list": 254900,
+      "sold": 260000
+    },
+    {
+      "n": 21,
+      "mls": "12668507",
+      "stat": "CLSD",
+      "list": 269000,
+      "sold": 269000
+    }
+  ],
+  "expected": {
+    "active": {
+      "count": 0,
+      "low": null,
+      "high": null,
+      "median": null,
+      "ratio": null
+    },
+    "pending": {
+      "count": 0,
+      "low": null,
+      "high": null,
+      "median": null,
+      "ratio": null
+    },
+    "closed": {
+      "count": 21,
+      "low": 180000,
+      "high": 269000,
+      "median": 225000,
+      "ratio": {
+        "count": 21,
+        "low": 0.7318674447686536,
+        "high": 1.0289655172413794,
+        "median": 0.97
+      }
+    },
+    "excluded": {
+      "count": 0,
+      "low": null,
+      "high": null,
+      "median": null,
+      "ratio": null
+    }
+  },
+  "opts": {}
+}

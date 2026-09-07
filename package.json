@@ -1,0 +1,21 @@
+{
+  "name": "uad-3-6-helper",
+  "version": "1.0.0",
+  "description": "Paste a connectMLS grid screenshot; get active / pending / closed counts with low, high and median prices. Deterministic client-side template-matching OCR — no upload, no API.",
+  "main": "app.js",
+  "type": "commonjs",
+  "scripts": {
+    "fixture": "node tests/make-grid-fixture.js",
+    "fixture:all": "node tests/make-grid-fixture.js --all",
+    "test": "node tests/run-all.js",
+    "test:grid": "node tests/test-grid.js",
+    "test:stats": "node tests/test-stats.js",
+    "test:edge": "node tests/test-edge-cases.js"
+  },
+  "keywords": ["appraisal", "uad", "mls", "ocr", "template-matching"],
+  "license": "ISC",
+  "devDependencies": {
+    "canvas": "^3.2.3",
+    "puppeteer": "^25.1.0"
+  }
+}

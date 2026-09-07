@@ -1,0 +1,148 @@
+{
+  "name": "grid-no-closed",
+  "listings": [
+    {
+      "n": 1,
+      "mls": "12741305",
+      "stat": "NEW",
+      "list": 189900,
+      "sold": null
+    },
+    {
+      "n": 2,
+      "mls": "12593242",
+      "stat": "PCHG",
+      "list": 189900,
+      "sold": null
+    },
+    {
+      "n": 3,
+      "mls": "12694549",
+      "stat": "ACTV",
+      "list": 201150,
+      "sold": null
+    },
+    {
+      "n": 4,
+      "mls": "12699534",
+      "stat": "ACTV",
+      "list": 205000,
+      "sold": null
+    },
+    {
+      "n": 5,
+      "mls": "12522195",
+      "stat": "ACTV",
+      "list": 220000,
+      "sold": null
+    },
+    {
+      "n": 6,
+      "mls": "12695123",
+      "stat": "ACTV",
+      "list": 244900,
+      "sold": null
+    },
+    {
+      "n": 7,
+      "mls": "12652682",
+      "stat": "ACTV",
+      "list": 250000,
+      "sold": null
+    },
+    {
+      "n": 8,
+      "mls": "12646685",
+      "stat": "ACTV",
+      "list": 250000,
+      "sold": null
+    },
+    {
+      "n": 9,
+      "mls": "12662597",
+      "stat": "ACTV",
+      "list": 259000,
+      "sold": null
+    },
+    {
+      "n": 10,
+      "mls": "12723349",
+      "stat": "ACTV",
+      "list": 260000,
+      "sold": null
+    },
+    {
+      "n": 11,
+      "mls": "12715596",
+      "stat": "ACTV",
+      "list": 269900,
+      "sold": null
+    },
+    {
+      "n": 12,
+      "mls": "12545410",
+      "stat": "TEMP",
+      "list": 198500,
+      "sold": null
+    },
+    {
+      "n": 13,
+      "mls": "12658627",
+      "stat": "TEMP",
+      "list": 229500,
+      "sold": null
+    },
+    {
+      "n": 14,
+      "mls": "12693407",
+      "stat": "FIN",
+      "list": 224900,
+      "sold": null
+    },
+    {
+      "n": 15,
+      "mls": "12738141",
+      "stat": "A/I",
+      "list": 249900,
+      "sold": null
+    },
+    {
+      "n": 16,
+      "mls": "12650118",
+      "stat": "PEND",
+      "list": 188000,
+      "sold": null
+    }
+  ],
+  "expected": {
+    "active": {
+      "count": 11,
+      "low": 189900,
+      "high": 269900,
+      "median": 244900,
+      "ratio": null
+    },
+    "pending": {
+      "count": 3,
+      "low": 188000,
+      "high": 249900,
+      "median": 224900,
+      "ratio": null
+    },
+    "closed": {
+      "count": 0,
+      "low": null,
+      "high": null,
+      "median": null,
+      "ratio": null
+    },
+    "excluded": {
+      "count": 2,
+      "low": 198500,
+      "high": 229500,
+      "median": 214000,
+      "ratio": null
+    }
+  },
+  "opts": {}
+}
