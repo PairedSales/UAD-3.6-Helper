@@ -6,6 +6,20 @@
   <title>UAD 3.6 Helper — Market Activity from a connectMLS Grid</title>
   <meta name="description" content="Paste a connectMLS search-results screenshot and get active, pending and closed counts with low, high and median prices. Deterministic template matching, entirely in your browser." />
 
+  <meta name="theme-color" content="#282a36" />
+  <meta name="color-scheme" content="dark" />
+
+  <!-- Emoji favicon, so no binary asset is needed -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E" />
+
+  <!-- Social preview -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="UAD 3.6 Helper" />
+  <meta property="og:description" content="Paste a connectMLS grid — get active, pending and closed sales with low, high and median price, plus the sale-to-list ratio net of concessions." />
+  <meta property="og:url" content="https://pairedsales.github.io/UAD-3.6-Helper/" />
+  <meta property="og:image" content="https://pairedsales.github.io/UAD-3.6-Helper/docs/screenshot.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,7 +37,7 @@
       <div class="app-header__icon">📊</div>
       <h1>UAD 3.6 Helper</h1>
       <p class="app-header__subtitle">
-        Paste a connectMLS grid → active, pending and closed sales with low, high and median price
+        Paste a connectMLS grid → active, pending and closed market activity
       </p>
     </header>
 
@@ -65,7 +79,7 @@
     </section>
 
     <!-- Summary -->
-    <section class="card hidden" id="summary-card">
+    <section class="card card--wide hidden" id="summary-card">
       <div class="card__title"><span>📈</span> Market Summary</div>
 
       <div class="notice-list" id="notice-list"></div>
@@ -90,14 +104,14 @@
     </section>
 
     <!-- Column assignment -->
-    <section class="card hidden" id="columns-card">
+    <section class="card card--wide hidden" id="columns-card">
       <div class="card__title"><span>🧭</span> Columns Used</div>
       <p class="section-note" id="columns-note"></p>
       <div class="column-map" id="column-map"></div>
     </section>
 
     <!-- Status mapping -->
-    <section class="card hidden" id="mapping-card">
+    <section class="card card--wide hidden" id="mapping-card">
       <div class="card__title debug-toggle" id="mapping-toggle">
         <span>🗂️</span> Status Mapping
         <span class="debug-chevron">▸</span>
@@ -117,7 +131,7 @@
     </section>
 
     <!-- Per-row review -->
-    <section class="card hidden" id="review-card">
+    <section class="card card--wide hidden" id="review-card">
       <div class="card__title"><span>🔎</span> Listings Read <span id="review-count"></span></div>
       <p class="section-note">
         Every row the screenshot contained. Correct anything that was misread — the summary
@@ -149,7 +163,7 @@
     </section>
 
     <!-- Debug -->
-    <section class="card hidden" id="debug-card">
+    <section class="card card--wide hidden" id="debug-card">
       <div class="card__title debug-toggle" id="debug-toggle">
         <span>🔬</span> Recognition Detail
         <span class="debug-chevron">▸</span>
@@ -162,8 +176,15 @@
     </section>
 
     <footer class="app-footer">
-      Deterministic template matching, entirely in your browser — the screenshot never leaves this
-      machine. Recognition core shared with <strong>MLS&nbsp;Extract</strong>.
+      <p>
+        Deterministic template matching, entirely in your browser — the screenshot never leaves
+        this machine.
+      </p>
+      <p class="app-footer__links">
+        Recognition core shared with
+        <a href="https://pairedsales.github.io/MLS-Extract/">MLS&nbsp;Extract</a>
+        · <a href="https://github.com/PairedSales/UAD-3.6-Helper">Source</a>
+      </p>
     </footer>
 
   </div>

@@ -1,5 +1,7 @@
 # UAD 3.6 Helper
 
+**▶ [Open the app](https://pairedsales.github.io/UAD-3.6-Helper/)** — nothing to install.
+
 Paste a connectMLS search-results screenshot. Get the three numbers a market
 analysis needs — **active listings**, **pending sales** and **closed sales**,
 each with its low, high and median price — plus the **sale-to-list ratio** of
@@ -15,7 +17,9 @@ deterministic template-matching recognizer as its sibling project
 
 ## Using it
 
-Double-click `index.html`. No server, no build step, no browser flags.
+Open **[pairedsales.github.io/UAD-3.6-Helper](https://pairedsales.github.io/UAD-3.6-Helper/)**,
+or clone the repo and double-click `index.html` — no server, no build step, no
+browser flags either way.
 
 1. Screenshot your connectMLS grid — include the header row and the **Stat**,
    **Orig List Pr**, **List Price**, **Sold Pr** and **CONC** columns.

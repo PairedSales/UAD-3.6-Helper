@@ -83,11 +83,24 @@ body::before {
 .app-container {
   position: relative;
   z-index: 1;
-  /* Wider than MLS-Extract's 640px: this app shows a per-listing review table
-   * the appraiser has to read across, not a single line of output. */
-  max-width: 900px;
+  /* MLS-Extract's measure, so the two tools open the same way. The results
+   * sections break out of it — see .card--wide. */
+  max-width: 640px;
   margin: 0 auto;
   padding: 2rem 1.25rem 4rem;
+}
+
+/* Results are tabular and need room the input never does. Breaking out of the
+ * reading column keeps the top of the page identical to MLS-Extract while the
+ * summary and the review table get the width they actually need. */
+.card--wide {
+  width: min(1120px, calc(100vw - 2.5rem));
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 760px) {
+  .card--wide { width: 100%; margin-left: 0; transform: none; }
 }
 
 /* ===== Header ===== */
@@ -641,6 +654,10 @@ body::before {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.9rem;
+  /* Each card is as tall as its own content. Only the closed card carries the
+   * ratio block, and stretching the other two to match leaves two large empty
+   * panels that read as missing content rather than as absent data. */
+  align-items: start;
 }
 
 @media (max-width: 720px) {
@@ -1022,3 +1039,8 @@ body::before {
   border-color: var(--error);
   background: var(--error-dim);
 }
+
+/* Footer links, matching MLS-Extract's footer treatment. */
+.app-footer p + p { margin-top: 0.4rem; }
+.app-footer__links a { color: var(--accent); text-decoration: none; }
+.app-footer__links a:hover { text-decoration: underline; }
