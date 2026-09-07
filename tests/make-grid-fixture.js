@@ -80,7 +80,10 @@ const COLUMNS = [
   { key: 'mt',      header: 'MT',           align: 'r', get: l => String(l.mt) },
   { key: 'closed',  header: 'Closed Date',  align: 'l', get: l => l.closed },
   { key: 'sold',    header: 'Sold Pr',      align: 'r', get: l => money(l.sold) },
-  { key: 'conc',    header: 'CONC',         align: 'r', get: l => (l.conc == null ? '' : String(l.conc)) },
+  { key: 'conc',    header: 'CONC',         align: 'r',
+    /* No thousands separator, and cents when the figure has them — which is
+     * exactly how connectMLS writes seller concessions. */
+    get: l => (l.conc == null ? '' : String(l.conc)) },
   { key: 'orig',    header: 'Orig List Pr', align: 'r', get: l => money(l.orig) },
   { key: 'list',    header: 'List Price',   align: 'r', get: l => money(l.list) },
   { key: 'rms',     header: '# Rms',        align: 'r', get: l => String(l.rms) },
@@ -335,6 +338,15 @@ const VARIANTS = {
      * the row whose status it cannot read. That row must still be listed. */
     const countable = LISTINGS.filter((_, i) => i !== blanked);
     write('grid-blank-stat', canvas, countable, { blankStat: [blanked], totalRows: LISTINGS.length });
+  },
+
+  /* Concessions with cents. connectMLS writes them without a thousands
+   * separator but with a decimal, so a short mark in this column is a decimal
+   * point, not a comma — and reading it as a comma multiplies it by a hundred. */
+  'grid-decimal-conc': () => {
+    const cents = { 17: 5000.25, 19: 9978.71, 23: 6147.5, 27: 1200.08 };
+    const rows = LISTINGS.map(l => (cents[l.n] ? { ...l, conc: cents[l.n] } : l));
+    write('grid-decimal-conc', renderGrid(rows), rows);
   },
 
   /* A handful of closed sales — few enough that each ratio is quoted. */

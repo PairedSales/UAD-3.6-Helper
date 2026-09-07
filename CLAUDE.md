@@ -98,6 +98,25 @@ Two surfaces means two working scales, which is why the ported code reads
 `workScale()` instead of `CFG.UPSCALE`. Every one of those was already
 "convert source pixels to working pixels"; only the constant changed.
 
+## A short mark is not always a comma
+
+A comma and a decimal point are both about three pixels of ink at 11px, and
+neither survives the height filter that separates digits from punctuation — so
+both reach `analyseNumericMarks` as anonymous short glyphs. They are told apart
+by POSITION: a thousands separator has a multiple of three digits to its right,
+a decimal point has the one or two digits of the cents.
+
+This is load-bearing. connectMLS writes money as `254,900` and seller
+concessions as `9978.71`. Assuming every short mark is a comma reads that as
+`997,871` — and the grouping check *passes*, because five digits do follow one
+mark — so a hundredfold concession lands in a sale-to-list ratio with nothing to
+show for it. Do not "simplify" this back to counting marks.
+
+Note the asymmetry the CONC column forces: it carries a decimal but never a
+thousands separator at any length, so `readIntegerToken` enforces comma grouping
+only when separators are actually present. `readPriceToken` still requires one,
+because a dollar amount without a separator is a fragment.
+
 ## The comp list
 
 At or below `CFG.COMP_LIST_MAX` closed sales, every sale-to-list ratio is quoted

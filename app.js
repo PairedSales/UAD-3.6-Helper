@@ -723,10 +723,10 @@ function priceCell(row, key) {
   input.type = 'text';
   input.inputMode = 'numeric';
   input.className = 'field field--price field--mono';
-  input.value = row[key] != null ? Number(row[key]).toLocaleString('en-US') : '';
+  input.value = fieldValue(row[key]);
   input.placeholder = '—';
   input.addEventListener('change', () => {
-    const parsed = parseMoneyInput(input.value);
+    const parsed = parseMoneyInput(input.value, key);
     if (parsed.error) {
       input.classList.add('is-invalid');
       input.title = parsed.error;
@@ -736,7 +736,7 @@ function priceCell(row, key) {
     input.classList.remove('is-invalid');
     input.title = '';
     row[key] = parsed.value;
-    input.value = row[key] != null ? Number(row[key]).toLocaleString('en-US') : '';
+    input.value = fieldValue(row[key]);
     markEdited(row);
     recompute();
   });
@@ -752,25 +752,38 @@ function priceCell(row, key) {
  * nothing on screen to suggest anything went wrong. The cents are dropped, and
  * the same magnitude bounds the recognizer applies are applied here.
  */
-function parseMoneyInput(raw) {
+function parseMoneyInput(raw, kind) {
   const text = String(raw).trim();
   if (!text) return { value: null };
 
-  const cleaned = text.replace(/[s$,]/g, '');
-  if (!/^d+(.d+)?$/.test(cleaned)) {
-    return { error: `"${text}" is not a price. Enter digits, e.g. 425000.` };
+  const cleaned = text.replace(/[\s$,]/g, '');
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) {
+    return { error: `"${text}" is not an amount. Enter digits, e.g. 425000.` };
   }
 
-  const value = Math.round(parseFloat(cleaned));
-  if (!isFinite(value)) return { error: `"${text}" is not a price.` };
-  if (value < CFG.PRICE_MIN_VALUE || value > CFG.PRICE_MAX_VALUE) {
+  /* Concessions are the one figure that legitimately carries cents and can be
+   * small — connectMLS writes them as 9978.71 — so they keep their decimals
+   * and are not held to a price's minimum. */
+  const isConcessions = kind === 'concessions';
+  const parsed = parseFloat(cleaned);
+  const value = isConcessions ? Math.round(parsed * 100) / 100 : Math.round(parsed);
+  if (!isFinite(value)) return { error: `"${text}" is not an amount.` };
+
+  const min = isConcessions ? 0 : CFG.PRICE_MIN_VALUE;
+  if (value < min || value > CFG.PRICE_MAX_VALUE) {
     return {
       error: `${formatPrice(value)} is outside the range this tool accepts ` +
-             `(${formatPrice(CFG.PRICE_MIN_VALUE)}–${formatPrice(CFG.PRICE_MAX_VALUE)}). ` +
+             `(${formatPrice(min)}–${formatPrice(CFG.PRICE_MAX_VALUE)}). ` +
              `Check for a stray digit or a pasted cents value.`,
     };
   }
   return { value };
+}
+
+/** Display an amount in a review-table field, keeping cents where they exist. */
+function fieldValue(v) {
+  if (v === null || v === undefined) return '';
+  return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 function renderOutput() {

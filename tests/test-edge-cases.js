@@ -126,6 +126,38 @@ const CASES = [
     },
   },
   {
+    name: 'grid-decimal-conc',
+    title: 'Concessions with cents — a decimal point is not a thousands comma',
+    run(check, res, truth) {
+      /* The regression this exists for: a short mark was assumed to be a comma,
+       * so "9978.71" validated as a thousands group (five digits after one
+       * mark) and read as 997,871 — a hundredfold concession, silently, in a
+       * sale-to-list ratio. */
+      const decimals = { 17: 5000.25, 19: 9978.71, 23: 6147.5, 27: 1200.08 };
+      const byIndex = new Map(res.rows.map(r => [r.index, r]));
+      const wrong = [];
+      for (const [n, want] of Object.entries(decimals)) {
+        const got = byIndex.get(Number(n));
+        if (!got || Math.abs((got.concessions ?? -1) - want) > 0.005) {
+          wrong.push(`row ${n}: read ${got ? got.concessions : 'nothing'}, expected ${want}`);
+        }
+      }
+      check.ok('cents are read, not multiplied by a hundred', wrong.length === 0, wrong.join('; '));
+
+      const all = res.rows.map(r => r.concessions).filter(v => typeof v === 'number');
+      check.ok('no concession exceeds its own sale price',
+        res.rows.every(r => !(r.concessions > 0) || !(r.soldPrice > 0) ||
+                            r.concessions < r.soldPrice),
+        JSON.stringify(all.slice(0, 8)));
+
+      expectExact(check, res, truth, 'decimal-conc');
+      const r = res.summary.closed.ratio, w = truth.expected.closed.ratio;
+      check.eq('ratio.low', pct(r && r.low), pct(w && w.low));
+      check.eq('ratio.high', pct(r && r.high), pct(w && w.high));
+      check.eq('ratio.median', pct(r && r.median), pct(w && w.median));
+    },
+  },
+  {
     name: 'grid-few-closed',
     title: 'Six closed sales — each ratio quoted, not just the median',
     run(check, res, truth) {

@@ -282,15 +282,66 @@ function classifyTokenGlyphs(surf, token, bank, skipAmbiguityAt) {
 }
 
 /**
- * Commas must fall on thousands boundaries.
+ * Tell a token's short marks apart by POSITION.
  *
- * The comma glyphs are dropped before classification (too short to clear the
- * height filter) but their positions are kept. A genuine price carries one
- * comma per three digits from the right; anything else means the token is not
- * a price, or is a fragment of one.
+ * A comma and a decimal point are each about three pixels of ink at 11px, and
+ * neither survives the height filter that separates digits from punctuation —
+ * so both arrive here as anonymous "short glyphs". Shape cannot separate them
+ * reliably at that size. Position can: a thousands separator always has a
+ * multiple of three digits to its right, and a decimal point has the one or two
+ * digits of the cents.
+ *
+ * This matters because connectMLS writes money with separators (254,900) and
+ * seller concessions with cents (9978.71). Assuming every short mark is a comma
+ * reads 9978.71 as 997,871 — the grouping "checks out", because five digits
+ * follow one mark — and a hundredfold concession then lands in a sale-to-list
+ * ratio with nothing to show for it.
+ *
+ * Returns { commas, fraction } — the count of thousands separators and the
+ * number of decimal places — or null when a mark sits where no separator
+ * belongs, which means the token is not a number or is a fragment of one.
  */
-function commaGroupingIsValid(digitCount, token) {
-  return token.commas.length === Math.floor((digitCount - 1) / 3);
+function analyseNumericMarks(token) {
+  const tall = token.tall;
+  const marks = token.commas.slice().sort((a, b) => a.x - b.x);
+  if (!marks.length) return { commas: 0, fraction: 0 };
+
+  const digitsRightOf = m => tall.filter(g => g.x > m.x).length;
+
+  /* Only the rightmost mark can be a decimal point, and only if one or two
+   * digits follow it. Three would be a thousands separator, which is the
+   * commoner reading and the one connectMLS actually uses for money. */
+  let fraction = 0;
+  let separators = marks;
+  const last = marks[marks.length - 1];
+  const trailing = digitsRightOf(last);
+  if (trailing === 1 || trailing === 2) {
+    fraction = trailing;
+    separators = marks.slice(0, -1);
+  }
+
+  /* Every remaining mark must sit on a thousands boundary of the INTEGER part,
+   * so the cents are discounted before the multiple-of-three test. */
+  for (const m of separators) {
+    const intDigitsAfter = digitsRightOf(m) - fraction;
+    if (intDigitsAfter <= 0 || intDigitsAfter % 3 !== 0) return null;
+  }
+
+  return { commas: separators.length, fraction };
+}
+
+/** Commas must fall on thousands boundaries of the integer part. */
+function commaGroupingIsValid(intDigitCount, commas) {
+  return commas === Math.floor((intDigitCount - 1) / 3);
+}
+
+/** Split a digit string into its integer and fractional parts. */
+function toDecimal(digits, fraction) {
+  if (!fraction) return { value: parseInt(digits, 10), intDigits: digits };
+  const intDigits = digits.slice(0, digits.length - fraction);
+  const cents = digits.slice(digits.length - fraction);
+  if (!intDigits.length) return null;
+  return { value: parseFloat(`${intDigits}.${cents}`), intDigits };
 }
 
 /**
@@ -321,21 +372,26 @@ function readPriceToken(surf, row, rawToken, bank, hasCurrencyPrefix) {
   }
   if (digits.length < CFG.PRICE_MIN_DIGITS || digits.length > CFG.PRICE_MAX_DIGITS) return null;
 
+  const marks = analyseNumericMarks(token);
+  if (!marks) return null;
+  const parts = toDecimal(digits, marks.fraction);
+  if (!parts) return null;
+
   /* Comma grouping is checked on EVERY token, dollar sign or not. A price
    * that split at a comma — "$1,085,000" read as "$1,085" — otherwise passes
    * every other check and lands in the statistics as $1,085. */
-  if (!commaGroupingIsValid(digits.length, token)) return null;
+  if (!commaGroupingIsValid(parts.intDigits.length, marks.commas)) return null;
 
-  /* A dollar amount of four or more digits with no comma at all is a
-   * fragment, not a price: connectMLS always renders the separator. */
-  if (digits.length >= 4 && token.commas.length === 0) return null;
+  /* A dollar amount of four or more digits with no separator at all is a
+   * fragment, not a price: connectMLS always renders the thousands comma. */
+  if (parts.intDigits.length >= 4 && marks.commas === 0) return null;
 
-  const value = parseInt(digits, 10);
+  const value = parts.value;
   if (!isFinite(value) || value < CFG.PRICE_MIN_VALUE || value > CFG.PRICE_MAX_VALUE) return null;
 
   return {
     value,
-    digits,
+    digits: parts.intDigits,
     text: (hadDollar ? '$' : '') + value.toLocaleString('en-US'),
     score: worst,
     hadDollar,
@@ -363,10 +419,26 @@ function readIntegerToken(surf, row, rawToken, bank) {
     if (c.score < CFG.MIN_DIGIT_SCORE) return null;
     digits += c.ch;
   }
-  if (!digits.length || digits.length > 7) return null;
-  if (token.commas.length && !commaGroupingIsValid(digits.length, token)) return null;
+  if (!digits.length || digits.length > 9) return null;
 
-  const value = parseInt(digits, 10);
+  const marks = analyseNumericMarks(token);
+  if (!marks) return null;
+  const parts = toDecimal(digits, marks.fraction);
+  if (!parts) return null;
+
+  /* Grouping is only enforced when separators are actually present. The
+   * concessions column writes 13980 and 9978.71 — no thousands comma at any
+   * length — so requiring one would reject the column outright. */
+  if (marks.commas && !commaGroupingIsValid(parts.intDigits.length, marks.commas)) return null;
+  if (parts.intDigits.length > 7) return null;
+
+  const value = parts.value;
   if (!isFinite(value)) return null;
-  return { value, digits, text: value.toLocaleString('en-US'), score: worst };
+  return {
+    value,
+    digits: parts.intDigits,
+    fraction: marks.fraction,
+    text: value.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+    score: worst,
+  };
 }

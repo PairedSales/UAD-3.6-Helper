@@ -18,6 +18,15 @@ for (const f of ['config.js', 'vocab.js', 'stats.js']) {
 }
 const S = context;
 
+/* analyseNumericMarks is the one piece of price.js that needs no canvas: it
+ * reads glyph positions only. Pulled in on its own so the decimal-versus-comma
+ * rule can be tested here, in the fast loop, rather than only through a
+ * browser and a rendered fixture. */
+vm.runInContext(
+  fs.readFileSync(path.join(SRC, 'price.js'), 'utf8')
+    .match(/function analyseNumericMarks[\s\S]*?\n}\n/)[0],
+  context, { filename: 'price.js#analyseNumericMarks' });
+
 const failures = [];
 let checks = 0;
 
@@ -132,6 +141,32 @@ console.log('\nprovisional gating');
   const clean = [row(1, 'ACTV', { listPrice: 100000 }), row(2, 'CLSD', { soldPrice: 90000, origPrice: 95000 })];
   eq('a clean small grid is not provisional',
     S.buildReport(clean, S.defaultStatusMapping()).provisional, false);
+}
+
+console.log('\ndecimal point versus thousands separator');
+{
+  /* Build a token the way finishToken does: tall glyphs on a 10px pitch, with
+   * the short marks sitting between them. Only the x positions matter. */
+  const token = (digits, markAfter) => ({
+    tall: Array.from({ length: digits }, (_, i) => ({ x: i * 10 })),
+    commas: markAfter.map(n => ({ x: (digits - n) * 10 - 5 })),
+  });
+  const marks = (digits, markAfter) => S.analyseNumericMarks(token(digits, markAfter));
+
+  eq('no marks at all', marks(5, []), { commas: 0, fraction: 0 });
+  eq('254,900 is one thousands separator', marks(6, [3]), { commas: 1, fraction: 0 });
+  eq('1,234,567 is two', marks(7, [3, 6]), { commas: 2, fraction: 0 });
+
+  /* The regression: six digits and one mark. Read as a comma the grouping
+   * "checks out" and 9978.71 becomes 997,871 — a hundredfold concession. */
+  eq('9978.71 is a decimal point, not a comma', marks(6, [2]), { commas: 0, fraction: 2 });
+  eq('one decimal place is a decimal place', marks(5, [1]), { commas: 0, fraction: 1 });
+  eq('1,234.56 is both', marks(6, [2, 5]), { commas: 1, fraction: 2 });
+  eq('a mark on no boundary at all is rejected', marks(6, [4]), null);
+  eq('two decimal points are rejected', marks(6, [1, 2]), null);
+
+  eq('the integer part is what the value keeps',
+    S.formatPrice(9978.71), '$9,979');
 }
 
 console.log('\nper-comp ratios on a small closed set');

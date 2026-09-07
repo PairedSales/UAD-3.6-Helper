@@ -53,7 +53,10 @@ Active-Contingent, and one click moves it.
 for an even one, rounded to the dollar. An empty set reports `—`, never `$0`.
 
 **Sale-to-list ratio**: `(sold price − concessions) ÷ original list price`,
-shown to three decimals (`98.859%`). A blank CONC cell counts as no concessions.
+shown to three decimals (`98.859%`). A blank CONC cell counts as no concessions,
+and a concession with cents (`9978.71`) is read as such — connectMLS writes
+money with thousands separators and concessions with a decimal, and the two are
+told apart by where the mark sits, not by its shape.
 A closed sale with no original list price gets no ratio — the *current* list
 price is not substituted, because a listing reduced twice would report a ratio
 against a number nobody ever offered at.
