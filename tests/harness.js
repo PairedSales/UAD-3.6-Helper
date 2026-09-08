@@ -62,6 +62,10 @@ async function analyze(browser, pngPath, opts = {}) {
       ratio: s.ratio ? {
         count: s.ratio.count, low: s.ratio.low, high: s.ratio.high, median: s.ratio.median,
       } : null,
+      marketTime: s.marketTime ? {
+        count: s.marketTime.count, missing: s.marketTime.missing,
+        low: s.marketTime.low, high: s.marketTime.high, median: s.marketTime.median,
+      } : null,
     });
     return {
       ok: !!report,
@@ -79,6 +83,7 @@ async function analyze(browser, pngPath, opts = {}) {
         n: r.n, index: r.index, mls: r.mls, status: r.status,
         listPrice: r.listPrice, origPrice: r.origPrice,
         soldPrice: r.soldPrice, concessions: r.concessions,
+        marketTime: r.marketTime,
         statusScore: r.statusScore,
       })),
       roles: result ? {
@@ -106,7 +111,17 @@ async function analyze(browser, pngPath, opts = {}) {
       indexCol: result && result.indexCol
         ? { first: result.indexCol.first, last: result.indexCol.last, missing: result.indexCol.missing }
         : null,
+      marketTimeCol: result && result.marketTimeCol
+        ? { read: result.marketTimeCol.read, unreadable: result.marketTimeCol.unreadable,
+            blank: result.marketTimeCol.blank }
+        : null,
+      fields: window.UAD.getFields().map(f => ({
+        group: f.group, label: f.label, value: f.value, display: f.display,
+        unit: f.unit || null, sourced: f.sourced || null,
+      })),
       textOutput: window.UAD.outputFor('text'),
+      uadOutput: window.UAD.outputFor('uad'),
+      rowsOutput: window.UAD.outputFor('rows'),
     };
   });
 
@@ -170,6 +185,26 @@ function checkBucket(check, name, got, want) {
   check.eq(`${name}.median`, got.median, want.median);
 }
 
+/**
+ * Compare one bucket's market time against ground truth.
+ *
+ * Separate from checkBucket because a fixture rendered without the MT column
+ * legitimately has none, and the two facts — "the prices are right" and "the
+ * days on market are right" — are asserted by different fixtures.
+ */
+function checkMarketTime(check, name, got, want) {
+  if (!want) {
+    check.ok(`${name}.marketTime is absent`, got === null, JSON.stringify(got));
+    return;
+  }
+  if (!check.ok(`${name} carries a market time`, !!got)) return;
+  check.eq(`${name}.marketTime.count`, got.count, want.count);
+  check.eq(`${name}.marketTime.low`, got.low, want.low);
+  check.eq(`${name}.marketTime.high`, got.high, want.high);
+  check.eq(`${name}.marketTime.median`, got.median, want.median);
+}
+
 module.exports = {
-  launch, analyze, truthFor, fixturePath, makeChecker, checkBucket, FIXTURES, INDEX, ROOT,
+  launch, analyze, truthFor, fixturePath, makeChecker, checkBucket, checkMarketTime,
+  FIXTURES, INDEX, ROOT,
 };

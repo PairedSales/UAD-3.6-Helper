@@ -100,12 +100,21 @@ function expectedSummary(listings, mapping) {
     const ratios = bucket !== 'closed' ? [] : rows
       .filter(l => l.sold > 0 && l.orig > 0)
       .map(l => (l.sold - (l.conc || 0)) / l.orig);
+    /* Market time. Zero is a real value — a listing entered today — so the
+     * filter is >= 0, matching summarizeBucket in src/stats.js. */
+    const days = rows.map(l => l.mt).filter(v => typeof v === 'number' && v >= 0);
 
     out[bucket] = {
       count: rows.length,
       low: prices.length ? Math.min(...prices) : null,
       high: prices.length ? Math.max(...prices) : null,
       median: median(prices),
+      marketTime: days.length ? {
+        count: days.length,
+        low: Math.min(...days),
+        high: Math.max(...days),
+        median: median(days),
+      } : null,
       ratio: ratios.length ? {
         count: ratios.length,
         low: Math.min(...ratios),

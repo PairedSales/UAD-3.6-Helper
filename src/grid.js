@@ -869,6 +869,70 @@ function runRoleCrossChecks(result, dataRows) {
   }
 }
 
+/**
+ * Read the MT (market time) column — connectMLS's days on market.
+ *
+ * Bound by its HEADER LABEL and by nothing else, on purpose. A money column
+ * can be identified from the data because money has a shape: a dollar sign,
+ * thousands separators, a plausible magnitude. Market time has none of that.
+ * It is a column of one- to three-digit integers, which is exactly what
+ * "# Rms", "Yr Blt", "All Beds", "# Garage" and "ASF" are too — and a median
+ * days-on-market that is really a median year built is a number an appraiser
+ * cannot see is wrong. So with no "MT" header there is no market time, and the
+ * app says so instead of guessing.
+ *
+ * The header label is the ONLY guard against a decoy column. CFG.MT_MAX_DAYS
+ * is not one and is not meant to be: every value in a Yr Blt column is under
+ * 3650 and would pass it. It bounds a market time that IS one, nothing more.
+ *
+ * Returns { col, values: Map(row → days), read, unreadable, blank } or null.
+ */
+function readMarketTimeColumn(surf, dataRows, cols, bank, uiFont, headerRoles) {
+  if (!headerRoles) return null;
+  let col = null;
+  for (const [c, role] of headerRoles) if (role === 'mt') { col = c; break; }
+  if (!col) return null;
+
+  /* Same lazy font-adapted fallback the money columns use: the bank is built
+   * from real connectMLS pixels in one family, and a screenshot taken on a
+   * machine with a different UI font needs the templates re-synthesized. */
+  let alt = null;
+  const altBank = () => {
+    if (alt === null) alt = uiFont ? fontAdaptedDigitBank(bank, uiFont) : false;
+    return alt || null;
+  };
+
+  const values = new Map();
+  let unreadable = 0, blank = 0;
+
+  for (const row of dataRows) {
+    const token = tokenAt(col, row);
+    if (!token) { blank++; continue; }
+    /* connectMLS writes a market time as bare digits at every length, so a
+     * short mark in this cell is a mark that does not belong to a market time
+     * — a speck, or ink from a neighbour. readIntegerToken would accept a
+     * validly grouped "1,234" as 1234; refusing it leaves a gap the appraiser
+     * can see and type over, which is the cheaper of the two mistakes. */
+    if (token.commas && token.commas.length) { unreadable++; continue; }
+    let v = readIntegerToken(surf, row, token, bank);
+    if (!v && altBank()) v = readIntegerToken(surf, row, token, altBank());
+    /* A day count is a whole number of days. A fraction means the token is not
+     * a market time — or is a fragment of something else that landed in this
+     * column — and either way it must not become a median. */
+    if (!v || v.fraction || v.digits.length > CFG.MT_MAX_DIGITS ||
+        v.value < 0 || v.value > CFG.MT_MAX_DAYS) {
+      unreadable++;
+      continue;
+    }
+    values.set(row, v.value);
+  }
+
+  console.log(`[MT] col ${col.index}: ${values.size} value(s) read, ` +
+    `${unreadable} unreadable, ${blank} blank cell(s)`);
+
+  return { col, values, read: values.size, unreadable, blank };
+}
+
 /** Find the 8-digit MLS # column, used to flag duplicate listings. */
 function findMlsColumn(surf, cols, bank) {
   let best = null;

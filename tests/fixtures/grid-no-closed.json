@@ -120,6 +120,12 @@
       "low": 189900,
       "high": 269900,
       "median": 229500,
+      "marketTime": {
+        "count": 13,
+        "low": 4,
+        "high": 403,
+        "median": 101
+      },
       "ratio": null
     },
     "pending": {
@@ -127,6 +133,12 @@
       "low": 188000,
       "high": 249900,
       "median": 224900,
+      "marketTime": {
+        "count": 3,
+        "low": 17,
+        "high": 238,
+        "median": 85
+      },
       "ratio": null
     },
     "closed": {
@@ -134,6 +146,7 @@
       "low": null,
       "high": null,
       "median": null,
+      "marketTime": null,
       "ratio": null
     },
     "excluded": {
@@ -141,6 +154,7 @@
       "low": null,
       "high": null,
       "median": null,
+      "marketTime": null,
       "ratio": null
     }
   },

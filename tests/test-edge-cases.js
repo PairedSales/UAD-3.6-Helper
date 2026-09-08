@@ -10,7 +10,8 @@
  * is missing it must say so, not quietly summarize the wrong one.
  */
 
-const { launch, analyze, truthFor, fixturePath, makeChecker, checkBucket } = require('./harness.js');
+const { launch, analyze, truthFor, fixturePath, makeChecker, checkBucket,
+        checkMarketTime } = require('./harness.js');
 
 const pct = v => (v == null ? '—' : (v * 100).toFixed(3) + '%');
 
@@ -20,6 +21,25 @@ function expectExact(check, res, truth, label) {
   checkBucket(check, `${label}.pending`, res.summary.pending, truth.expected.pending);
   checkBucket(check, `${label}.closed`, res.summary.closed, truth.expected.closed);
   check.eq(`${label}.excluded.count`, res.summary.excluded.count, truth.expected.excluded.count);
+}
+
+/**
+ * …and so must the market time, wherever the fixture has an MT column.
+ *
+ * Kept separate from expectExact because two fixtures deliberately have no MT
+ * column at all — a narrow crop and a header-less grid — and for those the
+ * assertion is that the app produced NOTHING, which is the opposite check.
+ */
+function expectMarketTime(check, res, truth, label) {
+  for (const id of ['active', 'pending', 'closed']) {
+    checkMarketTime(check, `${label}.${id}`, res.summary[id].marketTime, truth.expected[id].marketTime);
+  }
+}
+
+/** Every field the app puts on the clipboard is a bare number, or nothing. */
+function expectBareFields(check, res, label) {
+  const bad = res.fields.filter(f => f.value !== null && !/^[0-9]+$/.test(f.value));
+  check.ok(`${label}: every copied field is a bare number`, bad.length === 0, JSON.stringify(bad));
 }
 
 const CASES = [
@@ -36,6 +56,16 @@ const CASES = [
         String(res.roles.confidence));
       check.ok('a low-confidence warning was raised',
         res.warnings.some(w => w.level === 'warn' && /header/i.test(w.text)));
+      /* Market time is bound by its header label and by nothing else. With no
+       * header there is no way to tell an MT column from # Rms or Yr Blt, and
+       * a median "days on market" that is really a median year built is
+       * exactly the confident wrong number this app refuses to print. */
+      check.ok('no MT column was inferred without a header', res.marketTimeCol === null,
+        JSON.stringify(res.marketTimeCol));
+      check.eq('so there is no median days on market', res.summary.active.marketTime, null);
+      check.ok('and the absence is reported',
+        res.warnings.some(w => /MT.*market time|market time.*MT/i.test(w.text)),
+        res.warnings.map(w => w.text).join(' | ').slice(0, 200));
       expectExact(check, res, truth, 'no-header');
     },
   },
@@ -68,6 +98,7 @@ const CASES = [
     run(check, res, truth) {
       expectExact(check, res, truth, 'selected');
       check.eq('unreadable statuses', res.unresolved, 0);
+      expectMarketTime(check, res, truth, 'selected');
     },
   },
   {
@@ -76,6 +107,7 @@ const CASES = [
     run(check, res, truth) {
       expectExact(check, res, truth, 'grayscale');
       check.eq('unreadable statuses', res.unresolved, 0);
+      expectMarketTime(check, res, truth, 'grayscale');
     },
   },
   {
@@ -83,6 +115,7 @@ const CASES = [
     title: 'A different UI font — the font must be detected, not assumed',
     run(check, res, truth) {
       expectExact(check, res, truth, 'verdana');
+      expectMarketTime(check, res, truth, 'verdana');
       check.eq('unreadable statuses', res.unresolved, 0);
       check.ok('a font was chosen', !!(res.statusColumn && res.statusColumn.font),
         JSON.stringify(res.statusColumn));
@@ -99,6 +132,12 @@ const CASES = [
       check.ok('the missing ratio is reported',
         res.warnings.some(w => /Orig List Pr/.test(w.text)));
       check.eq('no ratio is produced', res.summary.closed.ratio, null);
+      check.ok('no MT column in this crop', res.marketTimeCol === null);
+      check.eq('no median days on market', res.summary.active.marketTime, null);
+      check.ok('the days-on-market field is empty, not guessed',
+        (res.fields.find(f => f.label === 'Median Days on Market') || {}).value === null);
+      check.ok('the missing MT column is reported',
+        res.warnings.some(w => /market time/i.test(w.text)));
       expectExact(check, res, truth, 'narrow');
     },
   },
@@ -217,8 +256,39 @@ const CASES = [
       /* All three are pending, so the buckets must be byte-identical to the
        * reference grid this fixture is a re-skin of. */
       expectExact(check, res, truth, 'kickout');
+      expectMarketTime(check, res, truth, 'kickout');
+      expectBareFields(check, res, 'kickout');
       check.ok('the kick-out flag reached the report',
         res.warnings.some(w => /kick-out/i.test(w.text)));
+    },
+  },
+  {
+    name: 'grid-blank-mt',
+    title: 'One active listing with no market time — the median must say so',
+    run(check, res, truth) {
+      /* The failure this exists to prevent: a median days on market quietly
+       * computed over twelve of thirteen active listings, printed in the form
+       * field with nothing to say it is short of the set it claims to
+       * summarize. The prices are all still there, so nothing else about the
+       * reading looks incomplete. */
+      check.ok('the MT column was still found', !!res.marketTimeCol);
+      check.eq('one active row has no market time',
+        res.summary.active.marketTime.missing, 1);
+      check.eq('the median rests on the twelve that do',
+        res.summary.active.marketTime.count, 12);
+      checkMarketTime(check, 'blank-mt.active',
+        res.summary.active.marketTime, truth.expected.active.marketTime);
+      check.ok('the summary is marked provisional', res.provisional === true);
+      check.ok('and says which figure is short',
+        res.uadOutput.includes('active row(s) have no market time'),
+        res.uadOutput.split('\n').slice(0, 4).join(' | '));
+      check.ok('the copied field block carries the caveat',
+        /PROVISIONAL/.test(res.uadOutput));
+
+      /* Everything the MT cell does not feed is untouched. */
+      expectExact(check, res, truth, 'blank-mt');
+      checkMarketTime(check, 'blank-mt.closed',
+        res.summary.closed.marketTime, truth.expected.closed.marketTime);
     },
   },
   {
@@ -226,6 +296,7 @@ const CASES = [
     title: 'A 2× Retina screenshot — every pixel threshold must rescale',
     run(check, res, truth) {
       expectExact(check, res, truth, 'hidpi');
+      expectMarketTime(check, res, truth, 'hidpi');
       check.eq('unreadable statuses', res.unresolved, 0);
       check.ok('rows read', res.rows.length === 37, `read ${res.rows.length}`);
     },

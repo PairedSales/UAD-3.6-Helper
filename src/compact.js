@@ -149,9 +149,13 @@ function columnsWorthReading(surf, header) {
     }
   }
 
+  /* 'mt' is in this list but not in the `decisive` test below: market time is
+   * bound by its header label alone (nothing else distinguishes it from '# Rms'
+   * or 'Yr Blt'), so it is kept whenever the header names it — but its absence
+   * is not a reason to go on guessing at other columns. */
   const named = header
     ? Array.from(header.roles.entries())
-        .filter(([, role]) => ['status', 'list', 'orig', 'sold', 'conc', 'mls'].includes(role))
+        .filter(([, role]) => ['status', 'list', 'orig', 'sold', 'conc', 'mls', 'mt'].includes(role))
     : [];
 
   /* A header that named the status column and at least one money column has
@@ -199,7 +203,25 @@ function finishKeep(surf, keep, why) {
 function buildCompactSurface(surf, keep) {
   const k = CFG.UPSCALE / surf.scale;
   const pad = Math.max(1, CFG.COLUMN_PAD_SRC * surf.scale);
-  const gap = Math.max(2, CFG.COLUMN_GAP_SRC * surf.scale);
+
+  /* Two jobs, two numbers — they used to share one, and only one of them can
+   * be a source-pixel constant.
+   *
+   *   mergeGap — "are these two source ranges close enough that cutting
+   *     between them gains nothing". A property of the page's own layout, so
+   *     source pixels are right, and it stays exactly where it was: widening
+   *     it would fuse more ranges, and a fused range is drawn from the source
+   *     VERBATIM — which copies the ink of columns we deliberately did not
+   *     keep into the compacted surface.
+   *
+   *   drawGap — the whitespace drawn between the strips. This one has to beat
+   *     the gap that ends a token, which is CFG.TOKEN_GAP_GLYPHS glyph widths,
+   *     so it has to be measured in glyph widths as well. Left in source
+   *     pixels it is correct at one glyph size and fails at larger ones, and
+   *     the failure is the quiet kind: the last cell of one column and the
+   *     first cell of the next come back as one token. */
+  const mergeGap = Math.max(2, CFG.COLUMN_GAP_SRC * surf.scale);
+  const drawGap = Math.max(mergeGap, Math.ceil(surf.glyphW * CFG.COLUMN_GAP_GLYPHS));
 
   const ranges = keep
     .map(c => ({ x0: Math.max(0, c.x0 - pad), x1: Math.min(surf.W, c.x1 + pad) }))
@@ -208,11 +230,11 @@ function buildCompactSurface(surf, keep) {
   const merged = [];
   for (const r of ranges) {
     const last = merged[merged.length - 1];
-    if (last && r.x0 <= last.x1 + gap) last.x1 = Math.max(last.x1, r.x1);
+    if (last && r.x0 <= last.x1 + mergeGap) last.x1 = Math.max(last.x1, r.x1);
     else merged.push({ x0: r.x0, x1: r.x1 });
   }
 
-  const width = merged.reduce((s, r) => s + (r.x1 - r.x0), 0) + gap * (merged.length + 1);
+  const width = merged.reduce((s, r) => s + (r.x1 - r.x0), 0) + drawGap * (merged.length + 1);
   const flat = document.createElement('canvas');
   flat.width = Math.max(1, width);
   flat.height = surf.H;
@@ -222,12 +244,12 @@ function buildCompactSurface(surf, keep) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, flat.width, flat.height);
 
-  let dx = gap;
+  let dx = drawGap;
   for (const r of merged) {
     const w = r.x1 - r.x0;
     ctx.drawImage(surf.grayClean || surf.gray, r.x0, 0, w, surf.H, dx, 0, w, surf.H);
     r.dx = dx;
-    dx += w + gap;
+    dx += w + drawGap;
   }
 
   const up = k === 1 ? cloneCanvas(flat) : upscaleCanvas(flat, k);

@@ -39,7 +39,8 @@ function eq(what, got, want) {
 }
 
 function row(n, status, over) {
-  return Object.assign({ n, status, listPrice: null, origPrice: null, soldPrice: null, concessions: null }, over);
+  return Object.assign({ n, status, listPrice: null, origPrice: null, soldPrice: null,
+    concessions: null, marketTime: null }, over);
 }
 
 console.log('\n========== STATISTICS ==========\n');
@@ -106,6 +107,128 @@ console.log('\nreport');
   eq('a complete reading is not provisional', r.provisional, false);
   eq('closed ratio median',
     r.summary.closed.ratio.median, ((250000 - 5000) / 275000 + 1) / 2);
+}
+
+/* ---- market time and the days-on-market figure ---- */
+console.log('\nmarket time');
+{
+  eq('median days rounds to whole days', S.medianDays([10, 11]), 11);
+  eq('an empty set has no median, not zero', S.medianDays([]), null);
+  eq('a day count formats without a currency symbol', S.formatDays(403), '403');
+  eq('no market time renders as a dash', S.formatDays(null), '—');
+  eq('zero days is a real answer, not a blank', S.formatDays(0), '0');
+
+  const rows = [
+    row(1, 'ACTV', { listPrice: 200000, marketTime: 10 }),
+    row(2, 'ACTV', { listPrice: 210000, marketTime: 0 }),
+    row(3, 'ACTV', { listPrice: 220000, marketTime: 100 }),
+    row(4, 'CLSD', { listPrice: 240000, origPrice: 240000, soldPrice: 240000, marketTime: 44 }),
+  ];
+  const r = S.buildReport(rows, S.defaultStatusMapping(), { hasMarketTime: true });
+  eq('a listing entered today is in the median, not filtered out as falsy',
+    r.summary.active.marketTime.count, 3);
+  eq('median market time', r.summary.active.marketTime.median, 10);
+  eq('low market time', r.summary.active.marketTime.low, 0);
+  eq('high market time', r.summary.active.marketTime.high, 100);
+  eq('closed sales carry their own market time', r.summary.closed.marketTime.median, 44);
+  eq('a complete market time is not a reason to withhold the reading',
+    r.provisional, false);
+}
+
+console.log('\nan incomplete market time blocks copying');
+{
+  const rows = [
+    row(1, 'ACTV', { listPrice: 200000, marketTime: 10 }),
+    row(2, 'ACTV', { listPrice: 210000, marketTime: null }),
+  ];
+  /* With an MT column present, a blank cell means the median rests on a subset
+   * of the bucket it claims to summarize — the same failure as an unpriced
+   * row, and gated the same way. */
+  const gated = S.buildReport(rows, S.defaultStatusMapping(), { hasMarketTime: true });
+  eq('the median discloses what it rests on', gated.summary.active.marketTime.count, 1);
+  eq('…and what it does not', gated.summary.active.marketTime.missing, 1);
+  eq('a subset median is provisional', gated.provisional, true);
+  eq('and says so by name',
+    gated.provisionalReasons.some(x => /active row\(s\) have no market time/.test(x)), true);
+
+  /* With NO MT column at all the field simply reads "—": a gap the appraiser
+   * can see is not a reason to withhold the prices, which were read fine. */
+  const noColumn = S.buildReport(
+    [row(1, 'ACTV', { listPrice: 200000 })], S.defaultStatusMapping(), {});
+  eq('no MT column is not a provisional reason', noColumn.provisional, false);
+  eq('and produces no median', noColumn.summary.active.marketTime, null);
+}
+
+/* ---- the form fields ---- */
+console.log('\nUAD 3.6 form fields');
+{
+  const rows = [
+    row(1, 'ACTV', { listPrice: 200000, marketTime: 10 }),
+    row(2, 'ACTV', { listPrice: 300000, marketTime: 30 }),
+    row(3, 'ACTV', { listPrice: 250000, marketTime: 20 }),
+    row(4, 'PEND', { listPrice: 240000, marketTime: 15 }),
+    row(5, 'CLSD', { listPrice: 260000, origPrice: 275000, soldPrice: 250000, marketTime: 44 }),
+    row(6, 'CLSD', { listPrice: 240000, origPrice: 240000, soldPrice: 230000, marketTime: 60 }),
+    row(7, 'SS', { listPrice: 190000, marketTime: 90 }),
+  ];
+  const r = S.buildReport(rows, S.defaultStatusMapping(), { hasMarketTime: true });
+  const fields = S.uadFields(r, { lookbackMonths: 12 });
+  const get = (label) => fields.find(f => f.label === label);
+
+  eq('the fields are the form’s, in the form’s order',
+    fields.map(f => f.label),
+    ['Active Listings', 'Median Days on Market', 'Lowest List Price', 'Median List Price',
+     'Highest List Price', 'Lookback Period', 'Sales in Lookback Period', 'Lowest Sale Price',
+     'Median Sale Price', 'Highest Sale Price', 'Pending Sales',
+     'Distressed Market Competition']);
+
+  eq('Active Listings counts the active bucket', get('Active Listings').value, '3');
+  eq('Median Days on Market is the ACTIVE listings’ median',
+    get('Median Days on Market').value, '20');
+  eq('Lowest List Price is the bare number the field takes',
+    get('Lowest List Price').value, '200000');
+  eq('…and the screen still shows it as money',
+    get('Lowest List Price').display, '$200,000');
+  eq('Median Sale Price is the SOLD median', get('Median Sale Price').value, '240000');
+  eq('Sales in Lookback Period counts the closed bucket',
+    get('Sales in Lookback Period').value, '2');
+  eq('Pending Sales counts pending, and a short sale is pending',
+    get('Pending Sales').value, '2');
+  eq('every value on the clipboard is bare digits',
+    fields.filter(f => f.value !== null).every(f => /^[0-9]+$/.test(f.value)), true);
+
+  eq('the lookback period is the user’s, not the grid’s',
+    [get('Lookback Period').value, get('Lookback Period').sourced], ['12', 'you']);
+  eq('an unset lookback period is empty, never invented',
+    S.uadFields(r, {}).find(f => f.label === 'Lookback Period').value, null);
+
+  eq('the distress question is observed, not answered',
+    [get('Distressed Market Competition').value, get('Distressed Market Competition').sourced],
+    [null, 'you']);
+  eq('…and the observation counts the short sales',
+    /1 short sale \(SS\)/.test(get('Distressed Market Competition').note), true);
+  eq('…and admits what a status code cannot show',
+    /REO, relocation and estate sales/.test(get('Distressed Market Competition').note), true);
+
+  const text = S.uadFieldsAsText(r, { lookbackMonths: 12 });
+  eq('the text block names the section', /UAD 3.6 — Search Result Metrics/.test(text), true);
+  eq('the text block quotes the same days on market', /Median Days on Market \.+ 20 days/.test(text), true);
+  eq('the text block quotes the same bare price', /Lowest List Price \.+ 200000/.test(text), true);
+  eq('a complete reading carries no caveat', /PROVISIONAL/.test(text), false);
+}
+
+console.log('\nthe form fields cannot escape the provisional banner');
+{
+  const rows = [
+    row(1, 'ACTV', { listPrice: 200000, marketTime: 10 }),
+    row(2, null, { listPrice: 300000, marketTime: 30 }),
+  ];
+  const r = S.buildReport(rows, S.defaultStatusMapping(), { hasMarketTime: true });
+  eq('an unreadable status is still provisional', r.provisional, true);
+  const text = S.uadFieldsAsText(r, { lookbackMonths: 12 });
+  eq('so the copied field block says so on its first line',
+    text.split('\n')[0], '*** PROVISIONAL — do not use without checking: ***');
+  eq('and lists why', /no readable status/.test(text), true);
 }
 
 /* ---- the failure this app exists to prevent ---- */
@@ -230,7 +353,7 @@ console.log('\noutput');
   eq('the report states the median rule', /two middle values/.test(text), true);
   const tsv = S.reportAsTsv(r);
   eq('the spreadsheet output discloses the priced count',
-    tsv.split('\n')[0], 'Category\tCount\tPriced\tLow\tHigh\tMedian\tRatio Low\tRatio High\tRatio Median');
+    tsv.split('\n')[0], 'Category\tCount\tPriced\tLow\tHigh\tMedian\tMedian DOM\tDOM Rows\tRatio Low\tRatio High\tRatio Median');
 }
 
 console.log(`\nStatistics: ${checks - failures.length}/${checks} checks passed`);

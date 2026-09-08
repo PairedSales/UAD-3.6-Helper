@@ -5,7 +5,8 @@
  * the right totals by two errors cancelling out.
  */
 
-const { launch, analyze, truthFor, fixturePath, makeChecker, checkBucket } = require('./harness.js');
+const { launch, analyze, truthFor, fixturePath, makeChecker, checkBucket,
+        checkMarketTime } = require('./harness.js');
 const { LISTINGS } = require('./grid-data.js');
 
 const pct = v => (v == null ? '—' : (v * 100).toFixed(3) + '%');
@@ -85,6 +86,57 @@ const pct = v => (v == null ? '—' : (v * 100).toFixed(3) + '%');
     check.eq('ratio.median', pct(gotR.median), pct(wantR.median));
   }
 
+  /* --- Market time, the days-on-market source --- */
+  console.log('');
+  check.ok('the MT column was found', !!res.marketTimeCol, 'no MT column bound');
+  if (res.marketTimeCol) {
+    check.eq('every MT cell read', res.marketTimeCol.read, LISTINGS.length);
+    check.eq('no MT cell refused', res.marketTimeCol.unreadable, 0);
+    check.eq('no MT cell blank', res.marketTimeCol.blank, 0);
+  }
+  const wrongMt = [];
+  for (const want of LISTINGS) {
+    const got = byN.get(want.n);
+    if (got && got.marketTime !== want.mt) {
+      wrongMt.push(`row ${want.n}: ${got.marketTime} ≠ ${want.mt}`);
+    }
+  }
+  check.ok(`all ${n} market times read correctly`, !wrongMt.length, wrongMt.slice(0, 6).join('; '));
+
+  checkMarketTime(check, 'active', res.summary.active.marketTime, truth.expected.active.marketTime);
+  checkMarketTime(check, 'pending', res.summary.pending.marketTime, truth.expected.pending.marketTime);
+  checkMarketTime(check, 'closed', res.summary.closed.marketTime, truth.expected.closed.marketTime);
+  check.eq('no active row is missing a market time',
+    res.summary.active.marketTime.missing, 0);
+
+  /* --- The form fields --- */
+  console.log('');
+  const field = (label) => (res.fields.find(f => f.label === label) || {});
+  check.eq('Active Listings', field('Active Listings').value, String(truth.expected.active.count));
+  check.eq('Median Days on Market',
+    field('Median Days on Market').value, String(truth.expected.active.marketTime.median));
+  check.eq('Lowest List Price is a bare number',
+    field('Lowest List Price').value, String(truth.expected.active.low));
+  check.eq('Median List Price is a bare number',
+    field('Median List Price').value, String(truth.expected.active.median));
+  check.eq('Highest List Price is a bare number',
+    field('Highest List Price').value, String(truth.expected.active.high));
+  check.eq('Sales in Lookback Period', field('Sales in Lookback Period').value,
+    String(truth.expected.closed.count));
+  check.eq('Median Sale Price is the SOLD median, bare',
+    field('Median Sale Price').value, String(truth.expected.closed.median));
+  check.eq('Pending Sales', field('Pending Sales').value, String(truth.expected.pending.count));
+  check.ok('the lookback period is left to the user',
+    field('Lookback Period').value === null && field('Lookback Period').sourced === 'you');
+  check.ok('the distress question is not answered',
+    field('Distressed Market Competition').value === null &&
+    field('Distressed Market Competition').sourced === 'you');
+  check.ok('no copied price carries a $ or a comma',
+    res.fields.filter(f => f.value !== null).every(f => /^[0-9]+$/.test(f.value)),
+    JSON.stringify(res.fields.filter(f => f.value !== null && !/^[0-9]+$/.test(f.value))));
+  check.ok('a complete reading copies without a caveat',
+    !/PROVISIONAL/.test(res.uadOutput), res.uadOutput.split('\n')[0]);
+
   /* --- Completeness guard --- */
   const errors = res.warnings.filter(w => w.level === 'error');
   check.ok('no completeness errors raised', errors.length === 0, errors.map(w => w.text).join(' | '));
@@ -95,6 +147,8 @@ const pct = v => (v == null ? '—' : (v * 100).toFixed(3) + '%');
 
   console.log('\n--- status clusters ---');
   for (const c of res.clusters) console.log(`  ${c.code || 'UNREADABLE'} ×${c.n} (${c.score.toFixed(3)})`);
+  console.log('\n--- form fields ---');
+  console.log(res.uadOutput.split('\n').map(l => '  ' + l).join('\n'));
   console.log('\n--- report text ---');
   console.log(res.textOutput.split('\n').map(l => '  ' + l).join('\n'));
 

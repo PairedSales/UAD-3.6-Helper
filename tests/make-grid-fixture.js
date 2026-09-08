@@ -82,7 +82,10 @@ const COLUMNS = [
   { key: 'streetNo', header: 'Street #',    align: 'l', get: l => l.streetNo },
   { key: 'street',  header: 'Str Name',     align: 'l', get: l => l.street },
   { key: 'sfx',     header: 'Sfx',          align: 'l', get: l => l.sfx },
-  { key: 'mt',      header: 'MT',           align: 'r', get: l => String(l.mt) },
+  /* connectMLS leaves the cell empty rather than printing a zero when it has
+   * no market time to show, so a null renders as a blank cell. */
+  { key: 'mt',      header: 'MT',           align: 'r',
+    get: l => (l.mt == null ? '' : String(l.mt)) },
   { key: 'closed',  header: 'Closed Date',  align: 'l', get: l => l.closed },
   { key: 'sold',    header: 'Sold Pr',      align: 'r', get: l => money(l.sold) },
   { key: 'conc',    header: 'CONC',         align: 'r',
@@ -379,6 +382,15 @@ const VARIANTS = {
     const swap = { FIN: 'HS48', 'A/I': 'HC24', PEND: 'HS120' };
     const rows = LISTINGS.map(l => (swap[l.stat] ? { ...l, stat: swap[l.stat] } : l));
     write('grid-kickout', renderGrid(rows), rows);
+  },
+
+  /* One active listing with no market time at all. The median days on market
+   * then rests on twelve of thirteen listings, which is a different number
+   * from the one the form asks for — so the report must say so and copying
+   * must be off until the cell is filled in by hand. */
+  'grid-blank-mt': () => {
+    const rows = LISTINGS.map(l => (l.n === 5 ? { ...l, mt: null } : l));
+    write('grid-blank-mt', renderGrid(rows), rows, { blankMt: [5] });
   },
 
   /* A 2× (Retina) screenshot — every upscaled-pixel constant must rescale. */

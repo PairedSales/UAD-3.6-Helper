@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>UAD 3.6 Helper — Market Activity from a connectMLS Grid</title>
-  <meta name="description" content="Paste a connectMLS search-results screenshot and get active, pending and closed counts with low, high and median prices. Deterministic template matching, entirely in your browser." />
+  <meta name="description" content="Paste a connectMLS search-results screenshot and get the UAD 3.6 Search Result Metrics — active, pending and closed counts with low, high and median prices, and the median days on market. Deterministic template matching, entirely in your browser." />
 
   <meta name="theme-color" content="#282a36" />
   <meta name="color-scheme" content="dark" />
@@ -15,7 +15,7 @@
   <!-- Social preview -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="UAD 3.6 Helper" />
-  <meta property="og:description" content="Paste a connectMLS grid — get active, pending and closed sales with low, high and median price, plus the sale-to-list ratio net of concessions." />
+  <meta property="og:description" content="Paste a connectMLS grid — get the UAD 3.6 Search Result Metrics field by field: counts, low/median/high prices, median days on market, and the sale-to-list ratio net of concessions." />
   <meta property="og:url" content="https://pairedsales.github.io/UAD-3.6-Helper/" />
   <meta property="og:image" content="https://pairedsales.github.io/UAD-3.6-Helper/docs/screenshot.png" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -37,7 +37,7 @@
       <div class="app-header__icon">📊</div>
       <h1>UAD 3.6 Helper</h1>
       <p class="app-header__subtitle">
-        Paste a connectMLS grid → active, pending and closed market activity
+        Paste a connectMLS grid → the UAD 3.6 Search Result Metrics, ready to click into the form
       </p>
     </header>
 
@@ -50,7 +50,7 @@
         <span class="drop-zone__icon">📋</span>
         <div class="drop-zone__text">
           <strong>Ctrl + V</strong> to paste your search results, or click to upload<br />
-          <small>Include the header row and the Stat, List Price and Sold Pr columns</small>
+          <small>Include the header row and the Stat, MT, List Price, Orig List Pr, Sold Pr and CONC columns</small>
         </div>
       </div>
 
@@ -78,6 +78,24 @@
       <div class="status hidden" id="status-area"></div>
     </section>
 
+    <!-- The form fields, in the form's own order -->
+    <section class="card card--wide hidden" id="uad-card">
+      <div class="card__title"><span>📋</span> UAD 3.6 — Search Result Metrics</div>
+      <p class="section-note">
+        The form's own fields, in the form's own order. <strong>Click a value to copy it</strong> —
+        what lands on the clipboard is the bare number the field takes (<code>189900</code>), because
+        the form draws the <code>$</code> outside the box and groups the digits itself.
+      </p>
+      <div class="uad-provisional hidden" id="uad-provisional"></div>
+      <div class="uad-grid" id="uad-grid"></div>
+      <div class="action-row">
+        <button class="btn btn--copy" id="uad-copy-all" disabled>
+          <span>📋</span> Copy every field
+        </button>
+        <span class="uad-live" id="uad-live" role="status" aria-live="polite"></span>
+      </div>
+    </section>
+
     <!-- Summary -->
     <section class="card card--wide hidden" id="summary-card">
       <div class="card__title"><span>📈</span> Market Summary</div>
@@ -88,7 +106,8 @@
 
       <div class="action-row">
         <div class="tab-row">
-          <button class="tab is-active" data-format="text">Report text</button>
+          <button class="tab is-active" data-format="uad">Form fields</button>
+          <button class="tab" data-format="text">Report text</button>
           <button class="tab" data-format="tsv">Spreadsheet</button>
           <button class="tab" data-format="rows">Every row</button>
         </div>
@@ -138,6 +157,7 @@
         recalculates as you type. Untick a row to leave it out entirely.
         <strong>Sale&nbsp;/&nbsp;list</strong> is
         <code>(sold price − concessions) ÷ original list price</code>, shown for closed sales.
+        <strong>MT</strong> is market time in days, and feeds the median days on market.
       </p>
       <div class="review-scroll">
         <table class="review-table" id="review-table">
@@ -152,6 +172,7 @@
               <th>List Price</th>
               <th>Sold Price</th>
               <th>Conc.</th>
+              <th title="Market time — connectMLS's days on market">MT</th>
               <th>Counted</th>
               <th>Sale / List</th>
               <th>Conf.</th>

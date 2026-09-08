@@ -100,7 +100,16 @@ const CFG = {
    * full-page pass as a locator and re-analyzes the crop it settles on. */
   LOCATE_SCALE: 1,
   COLUMN_PAD_SRC: 3,            // Source px kept around each column when cropping
-  COLUMN_GAP_SRC: 12,           // Gutter drawn between columns in the compacted surface
+  COLUMN_GAP_SRC: 12,           // Two source ranges closer than this are cropped as one
+  /* The gutter DRAWN between the strips of the compacted surface, as a multiple
+   * of the screenshot's own glyph width — because what it has to beat is the
+   * gap that ends a token (TOKEN_GAP_GLYPHS, 1.15 glyph widths), and that is
+   * measured in glyph widths too. A gutter fixed in source pixels is correct at
+   * one glyph size and fails at larger ones: on a Retina paste at browser zoom
+   * the token gap grows past it, and the last cell of one column and the first
+   * of the next tokenize as a single value. It is floored at COLUMN_GAP_SRC, so
+   * ordinary 11px screenshots are cropped exactly as before. */
+  COLUMN_GAP_GLYPHS: 2.0,
 
   /* --- Tokenizing a row ---
    * The gap that ends a cell is derived from the screenshot's own glyph
@@ -137,6 +146,18 @@ const CFG = {
   CONC_MAX_FRAC_OF_LIST: 0.25,  // A concessions column's median, as a fraction of the sold
   CONC_MIN_FRAC_OF_LIST: 0.002, //   median — concessions are a few percent, not a rounding
                                 //   error and not a quarter of the price
+
+  /* --- Market time (MT), connectMLS's days on market ---
+   * Bounds, not a guess: a market time is a whole number of days, and a
+   * listing that has been on the market for a decade is already an outlier an
+   * appraiser would want to see rather than a number to summarize silently. A
+   * token outside these bounds is not a market time, so the cell is refused. */
+  MT_MAX_DIGITS: 4,
+  MT_MAX_DAYS: 3650,
+
+  /* The lookback period the user types. Bounded so a slipped keystroke cannot
+   * put "120000 months" on the clipboard next to figures the app did read. */
+  LOOKBACK_MAX_MONTHS: 120,
 
   /* --- Header row --- */
   HEADER_MAX_ROWS: 6,           // Rows from the top that may be the header. A grid

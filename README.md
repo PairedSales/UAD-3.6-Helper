@@ -2,10 +2,11 @@
 
 **▶ [Open the app](https://pairedsales.github.io/UAD-3.6-Helper/)** — nothing to install.
 
-Paste a connectMLS search-results screenshot. Get the three numbers a market
-analysis needs — **active listings**, **pending sales** and **closed sales**,
-each with its low, high and median price — plus the **sale-to-list ratio** of
-every closed sale, net of seller concessions.
+Paste a connectMLS search-results screenshot. Get the UAD 3.6 **Search Result
+Metrics** section, field for field, ready to click into the form — active
+listings, pending sales and closed sales with their low, high and median
+price, the **median days on market**, plus the **sale-to-list ratio** of every
+closed sale, net of seller concessions.
 
 Nothing is uploaded. The screenshot is read in your browser, by the same
 deterministic template-matching recognizer as its sibling project
@@ -22,9 +23,41 @@ or clone the repo and double-click `index.html` — no server, no build step, no
 browser flags either way.
 
 1. Screenshot your connectMLS grid — include the header row and the **Stat**,
-   **Orig List Pr**, **List Price**, **Sold Pr** and **CONC** columns.
+   **MT**, **Orig List Pr**, **List Price**, **Sold Pr** and **CONC** columns.
 2. `Ctrl+V` into the page (or click to upload).
-3. Read the three cards. Check the review table underneath. Copy.
+3. Click each value straight into the form. Check the review table underneath.
+
+### The form panel
+
+The first thing on the page after a paste is the form's own section, in the
+form's own order and grouping:
+
+```
+ACTIVE LISTINGS                      SALES WITHIN LOOKBACK PERIOD
+  Active Listings          13           Lookback Period      [ 12 ] months
+  Median Days on Market   101           Sales in Lookback     21
+  Lowest List Price  $189,900           Lowest Sale Price   $180,000
+  Median List Price  $229,500           Median Sale Price   $225,000
+  Highest List Price $269,900           Highest Sale Price  $269,000
+
+PENDING SALES                        DISTRESSED MARKET COMPETITION
+  Pending Sales             3           your call — no SS codes in this search
+```
+
+**Click a value to copy it.** What reaches the clipboard is the bare number the
+field takes — `189900`, not `$189,900` — because the form draws the `$` outside
+the box and groups the digits itself, and a numeric input that refuses
+`189,900` while accepting `189900` is far commoner than the reverse.
+
+Two of those fields the app will not fill in, and says so:
+
+- **Lookback Period** is a parameter of your search, not a column of the grid.
+  There is a box to type it into so the copied block is complete; it is drawn
+  as yours, not as something that was read.
+- **Distressed Market Competition** is a judgement. MRED gives a short sale its
+  own status code and gives an REO, a relocation or an estate sale none, so the
+  app counts the `SS` rows, says the count, says what a status code cannot
+  show, and leaves the Yes/No alone.
 
 The paste box moves below the results once there is something to show, so the
 numbers are the first thing on the page on every subsequent paste.
@@ -37,6 +70,8 @@ numbers are the first thing on the page on every subsequent paste.
 | Pending sales | `PEND`, `FIN`, `A/I`, `CTGO`, `SS` | List Price |
 | Closed sales | `CLSD` | **Sold Pr** |
 | Not counted | `EXP`, `CANC`, `RNTD`, `CTGA`, `HOLD`, … | — |
+
+Days on market for each bucket comes from the **MT** column of the same rows.
 
 `ACTV`, `PCHG`, `TEMP`, `FIN`, `PEND` and `CLSD` are mapped as specified;
 the rest follow MRED Rules & Regulations §2.5 and standard appraisal practice.
@@ -51,6 +86,13 @@ Active-Contingent, and one click moves it.
 
 **Median**: the middle value for an odd count, the mean of the two middle values
 for an even one, rounded to the dollar. An empty set reports `—`, never `$0`.
+
+**Median days on market** comes from the **MT** (market time) column. The form
+prints that box inside its *Active Listings* group, between the count and the
+list prices, so the box carries the **active listings'** median — every other
+field in that group describes the active set. The pending and closed medians
+are read too and shown on their own cards, because what an appraiser compares
+the active market time against is how long the sold ones took.
 
 **Sale-to-list ratio**: `(sold price − concessions) ÷ original list price`,
 shown to three decimals (`98.859%`). A blank CONC cell counts as no concessions,
@@ -69,6 +111,7 @@ Past ten, the median stands alone.
 
 ```
 Closed sales: 6   Low $180,000   High $199,000   Median $183,200
+   Median days on market: 44
    Sale/list ratio, net of concessions: Low 73.187%   High 102.331%   Median 98.500%
    Comp 1:   100.057%
    Comp 2:   89.744%
@@ -99,6 +142,22 @@ one**. An appraiser can see a gap; they cannot see a plausible mistake.
   at 1, has no gaps, nothing was discarded, and every status was read.
 - Every glyph of every price goes through the confusable-pair guard
   (`0`/`9`, `3`/`5`, `1`/`7`, …). One ambiguous glyph rejects the whole cell.
+- **Days on market is reported only when the header says `MT`.** A money column
+  can be found in the data because money has a shape — a dollar sign, thousands
+  separators, a plausible magnitude. Market time has none: it is a column of
+  one- to three-digit integers, exactly like `# Rms`, `Yr Blt`, `All Beds`,
+  `ASF` and `# Garage`. A median days-on-market that is really a median year
+  built is a number nobody can see is wrong, so with no `MT` header the field
+  reads `—` and the app says why. The value bounds in `config.js` do not help
+  here and are not pretending to: every year in a `Yr Blt` column is under the
+  3650-day ceiling. The header label is the whole guard.
+- A median days on market that would rest on **some** of a bucket's rows marks
+  the summary provisional, the same way an unreadable price does — and every
+  MT cell is editable in the review table, so typing the two digits off the
+  screenshot clears it.
+- The per-field copy buttons go off with everything else while a reading is
+  provisional. A bare number has nowhere to carry a caveat, and the text block
+  — which does carry one — stays selectable by hand.
 - If the grid numbers its rows, those numbers are read back as an independent
   check that nothing was dropped, and any gap is reported by row number.
 
@@ -148,7 +207,9 @@ and about a second from paste to summary.
    column at once: at 11px the dollar sign loses its stem to binarization and
    correlates as `5`, `8` or `S`, but the comma grouping has to add up, and
    every cell in the column votes on it.
-8. **Roles** — `Stat`, `List Price`, `Orig List Pr`, `Sold Pr` and `CONC` are
+8. **Market time** — the `MT` column, read as plain integers. Bound by its
+   header label and by nothing else: see "What it will not do" above.
+9. **Roles** — `Stat`, `List Price`, `Orig List Pr`, `Sold Pr` and `CONC` are
    named from the header where there is one. Failing that, the sold column is
    the money column populated on the closed rows **and blank on the rest** —
    agreement alone is not evidence, because on a closed-heavy grid an
@@ -199,6 +260,7 @@ expected numbers cannot drift apart.
 | `grid-hidpi` | A 2× Retina paste gives identical buckets |
 | `grid-clipped-top` / `-bottom` | A sliced row is excluded, not misread |
 | `grid-blank-stat` | A blank Stat cell keeps its listing, and blocks the copy |
+| `grid-blank-mt` | One active listing with no MT — the median says what it rests on |
 | `grid-kickout` | `HS48` / `HC24` / `HS120` read, and bucket as `HS` / `HC` |
 | `grid-few-closed` / `-eleven-closed` | The comp list appears at 10 and not at 11 |
 | `grid-wide-range` | Prices from $87k to $2.1M |

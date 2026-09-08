@@ -27,6 +27,11 @@ const progressFill = $('#progress-fill');
 const progressPct  = $('#progress-pct');
 const progressMsg  = $('#progress-msg');
 
+const uadCard      = $('#uad-card');
+const uadGrid      = $('#uad-grid');
+const uadProvisional = $('#uad-provisional');
+const uadCopyAll   = $('#uad-copy-all');
+const uadLive      = $('#uad-live');
 const summaryCard  = $('#summary-card');
 const summaryGrid  = $('#summary-grid');
 const noticeList   = $('#notice-list');
@@ -48,8 +53,12 @@ let currentImageBlob = null;
 let lastResult = null;      /* raw pipeline output */
 let rows = [];              /* editable working copy */
 let statusMapping = defaultStatusMapping();
-let outputFormat = 'text';
+let outputFormat = 'uad';
 let lastReport = null;
+/* The lookback period of the user's search. The grid does not carry it — it is
+ * a parameter of the search, not a column — so it is typed, kept separate from
+ * everything that WAS read, and never inferred from the closed dates. */
+let lookbackMonths = null;
 /* Bumped on every new image. A run whose token is stale writes nothing: two
  * pastes in quick succession otherwise leave the slower image's numbers on
  * screen beside the newer image's preview, with copy enabled. */
@@ -126,6 +135,18 @@ copyBtn.addEventListener('click', async () => {
   }, 1600);
 });
 
+uadCopyAll.addEventListener('click', async () => {
+  if (uadCopyAll.disabled || !lastReport) return;
+  const ok = await copyToClipboard(uadFieldsAsText(lastReport, { lookbackMonths }));
+  uadCopyAll.classList.toggle('copied', ok);
+  uadCopyAll.innerHTML = ok ? '<span>✅</span> Copied' : '<span>⚠️</span> Copy failed';
+  announce(ok ? 'Every field copied.' : 'Copy failed.');
+  setTimeout(() => {
+    uadCopyAll.classList.remove('copied');
+    uadCopyAll.innerHTML = '<span>📋</span> Copy every field';
+  }, 1600);
+});
+
 function handleImageFile(file) {
   if (!file || !file.type.startsWith('image/')) {
     showStatus('That does not look like an image. Paste a PNG or JPG screenshot.', 'error');
@@ -155,9 +176,11 @@ function resetResults() {
   lastResult = null;
   lastReport = null;
   rows = [];
-  for (const card of [summaryCard, columnsCard, mappingCard, reviewCard, debugCard]) {
+  for (const card of [uadCard, summaryCard, columnsCard, mappingCard, reviewCard, debugCard]) {
     card.classList.add('hidden');
   }
+  uadGrid.innerHTML = '';
+  uadCopyAll.disabled = true;
   outputBox.value = '';
   copyBtn.disabled = true;
 }
@@ -184,15 +207,15 @@ function resetState() {
  * are adjacency-based — correct in both arrangements.
  */
 function placeInputCard(where) {
-  const anchor = where === 'bottom' ? appFooter : summaryCard;
+  const anchor = where === 'bottom' ? appFooter : uadCard;
   if (inputCard.nextElementSibling !== anchor) appContainer.insertBefore(inputCard, anchor);
 }
 
-/** Bring the summary into view if the reorder left it off screen. */
+/** Bring the results into view if the reorder left them off screen. */
 function revealSummary() {
-  const box = summaryCard.getBoundingClientRect();
+  const box = uadCard.getBoundingClientRect();
   if (box.top >= 0 && box.top < window.innerHeight * 0.5) return;
-  summaryCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  uadCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* ================================================================== */
@@ -236,11 +259,12 @@ async function runAnalysis() {
       origPrice: r.origPrice,
       soldPrice: r.soldPrice,
       concessions: r.concessions,
+      marketTime: r.marketTime,
       omit: false,
       edited: false,
       original: {
         status: r.status, listPrice: r.listPrice, origPrice: r.origPrice,
-        soldPrice: r.soldPrice, concessions: r.concessions,
+        soldPrice: r.soldPrice, concessions: r.concessions, marketTime: r.marketTime,
       },
     }));
 
@@ -254,7 +278,7 @@ async function runAnalysis() {
       return;
     }
 
-    for (const card of [columnsCard, mappingCard, reviewCard, debugCard]) {
+    for (const card of [uadCard, columnsCard, mappingCard, reviewCard, debugCard]) {
       card.classList.remove('hidden');
     }
     placeInputCard('bottom');
@@ -315,6 +339,7 @@ async function decodeImage(blob) {
 function recompute() {
   lastReport = buildReport(rows, statusMapping, lastResult && lastResult.review);
   renderNotices((lastResult && lastResult.warnings) || []);
+  renderUad(lastReport);
   renderSummary(lastReport);
   renderMapping(lastReport);
   renderReview(lastReport);
@@ -407,6 +432,8 @@ function renderSummary(report) {
         `</div>` +
         `<div class="stat-card__empty">by ${source}</div>`;
 
+      html += marketTimeMarkup(s, id);
+
       if (s.ratio) {
         html +=
           `<div class="stat-card__subhead" ` +
@@ -426,7 +453,8 @@ function renderSummary(report) {
                 `They are counted but not priced.</div>`;
       }
     } else if (s.count > 0) {
-      html += `<div class="stat-card__note">No prices could be read for these rows.</div>`;
+      html += `<div class="stat-card__note">No prices could be read for these rows.</div>` +
+              marketTimeMarkup(s, id);
     } else {
       html += `<div class="stat-card__empty">None in this search.</div>`;
     }
@@ -434,6 +462,33 @@ function renderSummary(report) {
     card.innerHTML = html;
     summaryGrid.appendChild(card);
   }
+}
+
+/**
+ * Market time, per bucket.
+ *
+ * Shown on every bucket, not only the active one, because the form's box is
+ * not the only reason to want it: the closed sales' median market time is what
+ * an appraiser compares the active listings' against to say whether the market
+ * is speeding up. Only the ACTIVE figure feeds the form field — see uadFields()
+ * in stats.js for why.
+ */
+function marketTimeMarkup(s, id) {
+  if (!s.count) return '';
+  if (!s.marketTime) {
+    return `<div class="stat-card__note stat-card__note--quiet">` +
+           `No market time was read for these rows.</div>`;
+  }
+  const mt = s.marketTime;
+  const which = id === 'active' ? 'days on market' : 'days marketed';
+  return `<div class="stat-card__subhead" title="From the MT column">Market time</div>` +
+    `<div class="stat-card__stats stat-card__stats--tight">` +
+      statLine('Low', formatDays(mt.low)) +
+      statLine('High', formatDays(mt.high)) +
+      statLine('Median', formatDays(mt.median), true) +
+    `</div>` +
+    `<div class="stat-card__empty">median ${which}` +
+    (mt.missing ? ` · ${mt.count} of ${s.count} rows` : '') + `</div>`;
 }
 
 /**
@@ -505,6 +560,12 @@ function renderColumns(result) {
     'feeds closed sales', 'sold');
   line('Concessions', roles.conc && roles.conc.col, roles.conc ? roles.conc.values.size : 0,
     'subtracted from the sold price in the ratio', 'conc');
+  line('Market time (MT)',
+    result.marketTimeCol && result.marketTimeCol.col,
+    result.marketTimeCol ? result.marketTimeCol.read : 0,
+    result.marketTimeCol
+      ? 'feeds median days on market · named by the header, never inferred'
+      : 'no MT header — days on market cannot be inferred from a column of small numbers');
   if (result.mlsCol) line('MLS #', result.mlsCol.col, result.mlsCol.values.size, 'duplicate check');
 
   const summary = {
@@ -652,6 +713,7 @@ function renderReview(report) {
     tr.appendChild(priceCell(row, 'listPrice'));
     tr.appendChild(priceCell(row, 'soldPrice'));
     tr.appendChild(priceCell(row, 'concessions'));
+    tr.appendChild(daysCell(row));
 
     /* Counted price */
     const countedTd = document.createElement('td');
@@ -697,7 +759,7 @@ function renderReview(report) {
 
 /** One place decides whether a row carries a hand correction. */
 function markEdited(row) {
-  row.edited = ['status', 'listPrice', 'origPrice', 'soldPrice', 'concessions']
+  row.edited = ['status', 'listPrice', 'origPrice', 'soldPrice', 'concessions', 'marketTime']
     .some(k => row[k] !== row.original[k]);
 }
 
@@ -742,6 +804,68 @@ function priceCell(row, key) {
   });
   td.appendChild(input);
   return td;
+}
+
+/**
+ * The market-time cell.
+ *
+ * Editable for the same reason the price cells are: a cell the recognizer
+ * refused is what makes the reading provisional, and typing the two digits off
+ * the screenshot is how the appraiser clears it. Without this the median days
+ * on market would be uncorrectable, and one smudged cell would disable copying
+ * with nothing the user could do about it.
+ */
+function daysCell(row) {
+  const td = document.createElement('td');
+  td.className = 'num';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.inputMode = 'numeric';
+  input.className = 'field field--days field--mono';
+  input.value = row.marketTime === null || row.marketTime === undefined
+    ? '' : String(row.marketTime);
+  input.placeholder = '—';
+  const HINT = 'Market time in days, from the MT column';
+  input.title = HINT;
+  input.addEventListener('change', () => {
+    const parsed = parseDaysInput(input.value);
+    if (parsed.error) {
+      input.classList.add('is-invalid');
+      input.title = parsed.error;
+      showStatus(parsed.error, 'error');
+      return;                       /* keep what the user typed so they can fix it */
+    }
+    input.classList.remove('is-invalid');
+    input.title = HINT;
+    row.marketTime = parsed.value;
+    input.value = row.marketTime === null ? '' : String(row.marketTime);
+    markEdited(row);
+    recompute();
+  });
+  td.appendChild(input);
+  return td;
+}
+
+/**
+ * Parse a typed market time.
+ *
+ * Whole days only, held to the same bounds the recognizer holds a read cell to,
+ * so a hand correction cannot put a value into the median that the reader
+ * itself would have refused.
+ */
+function parseDaysInput(raw) {
+  const text = String(raw).trim();
+  if (!text) return { value: null };
+  const cleaned = text.replace(/[\s,]/g, '');
+  if (!/^\d+$/.test(cleaned)) {
+    return { error: `"${text}" is not a number of days. Enter whole days, e.g. 44.` };
+  }
+  const value = parseInt(cleaned, 10);
+  if (!isFinite(value) || value > CFG.MT_MAX_DAYS) {
+    return { error: `${text} days is outside the range this tool accepts ` +
+                    `(0–${CFG.MT_MAX_DAYS}). Check for a stray digit.` };
+  }
+  return { value };
 }
 
 /**
@@ -790,12 +914,13 @@ function renderOutput() {
   if (!lastReport) return;
   if (outputFormat === 'tsv') outputBox.value = reportAsTsv(lastReport);
   else if (outputFormat === 'rows') outputBox.value = allRowsAsTsv(lastReport);
-  else outputBox.value = reportAsText(lastReport);
+  else if (outputFormat === 'text') outputBox.value = reportAsText(lastReport);
+  else outputBox.value = uadFieldsAsText(lastReport, { lookbackMonths });
 }
 
 function allRowsAsTsv(report) {
   const lines = ['#\tMLS #\tStatus\tCategory\tOrig List\tList Price\tSold Price\tConcessions\t' +
-                 'Counted\tSale/List'];
+                 'MT\tCounted\tSale/List'];
   for (const row of rows) {
     const entry = findReportEntry(report, row);
     const bucketId = row.omit ? 'skipped'
@@ -810,11 +935,213 @@ function allRowsAsTsv(report) {
       row.listPrice != null ? row.listPrice : '',
       row.soldPrice != null ? row.soldPrice : '',
       row.concessions != null ? row.concessions : '',
+      row.marketTime != null ? row.marketTime : '',
       entry && entry.price != null ? entry.price : '',
       ratio != null ? formatRatio(ratio) : '',
     ].join('\t'));
   }
   return lines.join('\n');
+}
+
+/* ================================================================== */
+/*  The UAD 3.6 form panel                                             */
+/* ================================================================== */
+
+/**
+ * The form's own fields, laid out the way the form lays them out.
+ *
+ * The three summary cards below answer "what does this market look like"; this
+ * panel answers the narrower question the appraiser is actually sitting in
+ * front of — what goes in each box. So it copies ONE field at a time, and what
+ * it copies is the bare number that field takes: the form draws the "$" outside
+ * the input and groups the digits itself, and a numeric field that rejects
+ * "189,900" while accepting "189900" is far commoner than the reverse.
+ *
+ * The fields themselves come from uadFields() in stats.js, which is also what
+ * the copied text block is built from — one source, so the panel and the
+ * clipboard cannot disagree about a number.
+ */
+function renderUad(report) {
+  uadGrid.innerHTML = '';
+  const fields = uadFields(report, { lookbackMonths });
+
+  /* Per-field copy is off while the reading is provisional, for the reason the
+   * whole-report copy is: a bare number has nowhere to carry the caveat. The
+   * text block in the panel below still carries it, and is still selectable by
+   * hand — a caveat you can read is the point, not an obstacle course. */
+  const blocked = report.provisional;
+
+  for (const g of UAD_GROUPS) {
+    const mine = fields.filter(f => f.group === g.id);
+    if (!mine.length) continue;
+
+    const box = document.createElement('div');
+    box.className = `uad-group uad-group--${g.id}`;
+
+    const title = document.createElement('div');
+    title.className = 'uad-group__title';
+    title.textContent = g.title;
+    box.appendChild(title);
+
+    for (const f of mine) box.appendChild(uadFieldRow(f, blocked, g.title));
+    uadGrid.appendChild(box);
+  }
+
+  if (blocked) {
+    uadProvisional.textContent =
+      'Provisional — copying is off until this reading is complete: ' +
+      report.provisionalReasons.join('; ') +
+      '. Fix them in the table below; the fields here update as you go.';
+    uadProvisional.classList.remove('hidden');
+  } else {
+    uadProvisional.classList.add('hidden');
+  }
+
+  uadCopyAll.disabled = blocked;
+}
+
+function uadFieldRow(field, blocked, groupTitle) {
+  const row = document.createElement('div');
+  row.className = 'uad-field' +
+    (field.sourced === 'you' ? ' uad-field--yours' : '') +
+    (field.value === null ? ' uad-field--empty' : '');
+
+  const label = document.createElement('span');
+  label.className = 'uad-field__label';
+  /* The form itself repeats "Active Listings" as both the heading and the
+   * field, so the repetition is faithful and stays. The exception is a row
+   * that is only an observation — the distress question — where a second copy
+   * of the heading reads as a second thing to fill in. */
+  const isObservation = field.value === null && field.sourced === 'you' && !field.editable;
+  label.textContent = (isObservation && field.label === groupTitle) ? '' : field.label;
+  row.appendChild(label);
+
+  if (field.editable === 'lookbackMonths') {
+    /* Input and unit are wrapped together rather than laid out as two grid
+     * cells, so the row keeps the same two-column shape as every other field
+     * without a :has() selector deciding it. */
+    const pair = document.createElement('span');
+    pair.className = 'uad-field__pair';
+    pair.appendChild(lookbackInput(field));
+    if (field.unit) pair.appendChild(unitTag(field.unit));
+    row.appendChild(pair);
+  } else if (field.value === null && field.sourced === 'you') {
+    /* Distressed market competition. There is nothing to copy, because the
+     * grid cannot answer it — see distressedObservation() in stats.js. */
+    const span = document.createElement('span');
+    span.className = 'uad-field__value uad-field__value--static';
+    span.textContent = field.display;
+    row.appendChild(span);
+  } else {
+    row.appendChild(uadCopyButton(field, blocked));
+  }
+
+  if (field.note) {
+    const note = document.createElement('span');
+    note.className = 'uad-field__note';
+    note.textContent = field.note;
+    row.appendChild(note);
+  }
+  return row;
+}
+
+function uadCopyButton(field, blocked) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'uad-field__value';
+  btn.disabled = field.value === null || blocked;
+
+  const val = document.createElement('span');
+  val.className = 'uad-field__num';
+  val.textContent = field.display;
+  btn.appendChild(val);
+
+  if (field.unit) {
+    const unit = document.createElement('span');
+    unit.className = 'uad-field__unit';
+    unit.textContent = field.unit;
+    btn.appendChild(unit);
+  }
+
+  btn.title = field.value === null
+    ? `${field.label} could not be read from this screenshot.`
+    : blocked
+      ? 'Copying is off until the reading above is complete.'
+      : `Copy ${field.value} — ${field.label}`;
+  btn.setAttribute('aria-label', btn.title);
+
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    const ok = await copyToClipboard(field.value);
+    btn.classList.toggle('is-copied', ok);
+    announce(ok ? `${field.label} copied: ${field.value}` : 'Copy failed.');
+    setTimeout(() => btn.classList.remove('is-copied'), 1400);
+  });
+  return btn;
+}
+
+/**
+ * The lookback period is the one number on this panel the app cannot read.
+ *
+ * It is a parameter of the search, not a column of the grid, so it is typed
+ * rather than recognized — and it is kept visibly separate from the fields
+ * that WERE read, because a number the app was told is not evidence of
+ * anything the app saw.
+ */
+function lookbackInput(field) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.inputMode = 'numeric';
+  input.className = 'field uad-field__input field--mono';
+  input.value = lookbackMonths === null ? '' : String(lookbackMonths);
+  input.placeholder = '—';
+  input.setAttribute('aria-label', 'Lookback period in months');
+  input.title = 'The lookback period of your connectMLS search, in months.';
+
+  /* This handler deliberately does NOT call recompute().
+   *
+   * recompute() rebuilds this panel from scratch, which would replace the very
+   * input the event came from. "change" fires on blur, so clicking a copy
+   * button straight after typing would destroy that button between mousedown
+   * and mouseup and the click would never land — the first copy after entering
+   * a lookback period would silently do nothing. The lookback feeds only the
+   * copied text, so refreshing that is the whole of the work. */
+  input.addEventListener('change', () => {
+    const text = input.value.trim();
+    if (text === '') {
+      input.classList.remove('is-invalid');
+      lookbackMonths = null;
+      renderOutput();
+      return;
+    }
+    const n = Number(text.replace(/\s/g, ''));
+    if (!isFinite(n) || n <= 0 || n > CFG.LOOKBACK_MAX_MONTHS || Math.round(n) !== n) {
+      input.classList.add('is-invalid');
+      showStatus(`"${text}" is not a lookback period. Enter whole months, ` +
+        `1–${CFG.LOOKBACK_MAX_MONTHS}.`, 'error');
+      return;
+    }
+    input.classList.remove('is-invalid');
+    lookbackMonths = n;
+    renderOutput();
+  });
+  return input;
+}
+
+/** The unit the form prints beside its own input, e.g. "months". */
+function unitTag(text) {
+  const el = document.createElement('span');
+  el.className = 'uad-field__unit uad-field__unit--outside';
+  el.textContent = text;
+  return el;
+}
+
+/** One live region, so a copy is announced to a screen reader once. */
+function announce(message) {
+  if (!uadLive) return;
+  uadLive.textContent = message;
+  clearTimeout(announce._t);
+  announce._t = setTimeout(() => { uadLive.textContent = ''; }, 3000);
 }
 
 /* ================================================================== */
@@ -878,6 +1205,9 @@ window.UAD = {
     if (!lastReport) return '';
     if (fmt === 'tsv') return reportAsTsv(lastReport);
     if (fmt === 'rows') return allRowsAsTsv(lastReport);
+    if (fmt === 'uad') return uadFieldsAsText(lastReport, { lookbackMonths });
     return reportAsText(lastReport);
   },
+  getFields: () => (lastReport ? uadFields(lastReport, { lookbackMonths }) : []),
+  setLookback: (m) => { lookbackMonths = m; recompute(); },
 };

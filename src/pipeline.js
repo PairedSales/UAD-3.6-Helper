@@ -18,10 +18,17 @@
  * A GAP in the sequence is the finding, not a reason to abandon the check —
  * "rows 31 and 32 are missing" is exactly what the user needs to hear.
  */
-function findIndexColumn(surf, cols, dataRows, bank) {
+function findIndexColumn(surf, cols, dataRows, bank, skipCol) {
   let best = null;
 
   for (const col of cols) {
+    /* The MT column is one to three digits on every row, which is the shape
+     * this function is looking for. It is excluded by name rather than left to
+     * the uniqueness and span tests, because those pass on a search whose
+     * market times happen to be distinct and tightly clustered — and a wrong
+     * row-number column does not produce a wrong number, it produces a FALSE
+     * assurance that no listing was dropped. */
+    if (skipCol && col === skipCol) continue;
     if (col.cells.size < Math.max(3, dataRows.length * 0.6)) continue;
 
     const seen = new Map();
@@ -269,9 +276,52 @@ async function extractGrid(img, onProgress) {
     });
   }
 
+  step(78, 'Reading market time…');
+  const marketTimeCol = readMarketTimeColumn(surf, dataRows, cols, bank, uiFont, headerRoles);
+  if (!marketTimeCol) {
+    /* Two different causes, two different things to do about it — so they are
+     * two different messages rather than one that fits neither. */
+    warnings.push(header ? {
+      level: 'info',
+      text: 'The header named no "MT" (market time) column, so no median days on market could ' +
+            'be computed. Include the MT column in the screenshot to get it — it cannot be ' +
+            'inferred, because a column of small whole numbers could equally be # Rms or Yr Blt.',
+    } : {
+      level: 'warn',
+      text: 'No header row was recognized, so the MT (market time) column could not be ' +
+            'identified and no median days on market is reported. MT is a column of small ' +
+            'whole numbers, and so are # Rms, Yr Blt, All Beds and ASF — nothing in the data ' +
+            'itself tells them apart, so the app will not guess. Re-take the screenshot with ' +
+            'the header row included.',
+    });
+  } else if (!marketTimeCol.read) {
+    /* Nothing came out of it. An all-blank column is a grid that printed no
+     * market times, which is not a recognition failure; a column of refused
+     * cells is. Both leave the same hole, and the level says which happened. */
+    const allBlank = marketTimeCol.blank && !marketTimeCol.unreadable;
+    warnings.push({
+      level: allBlank ? 'info' : 'warn',
+      text: allBlank
+        ? 'The MT (market time) column was found but every cell in it is empty, so there is no ' +
+          'median days on market.'
+        : 'The MT (market time) column was found, but no cell in it read as a day count — so ' +
+          'there is no median days on market. Check the column map below against your ' +
+          'screenshot, or fill the values in by hand.',
+    });
+  } else if (marketTimeCol.unreadable) {
+    warnings.push({
+      level: 'warn',
+      text: `${marketTimeCol.unreadable} MT (market time) cell(s) could not be read` +
+            (marketTimeCol.blank ? ` and ${marketTimeCol.blank} were blank` : '') +
+            `. Any median days on market below rests on the rows that did carry one — fill ` +
+            `them in below to complete it.`,
+    });
+  }
+
   step(80, 'Cross-checking…');
   const mlsCol = findMlsColumn(surf, cols, bank);
-  const indexCol = findIndexColumn(surf, cols, dataRows, bank);
+  const indexCol = findIndexColumn(surf, cols, dataRows, bank,
+    marketTimeCol && marketTimeCol.col);
 
   /* ---- Assemble the rows ---- */
   const rows = [];
@@ -316,6 +366,8 @@ async function extractGrid(img, onProgress) {
       origPrice: valueAt('orig', row),
       soldPrice: valueAt('sold', row),
       concessions: valueAt('conc', row),
+      marketTime: marketTimeCol && marketTimeCol.values.has(row)
+        ? marketTimeCol.values.get(row) : null,
       edited: false,
       omit: false,
       _row: row,
@@ -445,12 +497,17 @@ async function extractGrid(img, onProgress) {
     roleProblems: roles.problems.length,
     confidence: roles.confidence,
     noStatusColumn: !statusCol,
+    /* "No MT column at all" and "an MT column with holes in it" call for
+     * different responses: the first is a gap the appraiser can see (the field
+     * reads —), the second is a median quietly resting on a subset. Only the
+     * second blocks copying, so the gate has to be able to tell them apart. */
+    hasMarketTime: !!marketTimeCol,
   };
 
   return {
     surf, rows, warnings, skipped, review,
     header, cols, statusCol, statusClusters: clusters,
-    money, integers, roles, mlsCol, indexCol,
+    money, integers, roles, mlsCol, indexCol, marketTimeCol,
     dataRowCount: dataRows.length,
     failed: false,
   };
