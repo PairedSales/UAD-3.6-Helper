@@ -63,6 +63,9 @@ const DEFAULT_BUCKET = {
   NEW: 'active', PCHG: 'active', ACTV: 'active', TEMP: 'active',
   FIN: 'pending', 'A/I': 'pending', PEND: 'pending',
   CLSD: 'closed',
+  /* Kick-out codes carry the hours the listing agent typed. They normalize to
+   * their base code in src/vocab.js, so they bucket exactly as HS and HC do. */
+  HS48: 'pending', HS120: 'pending', HC24: 'pending',
 };
 
 /** Unrounded median, for ratios. */

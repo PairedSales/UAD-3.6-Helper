@@ -164,6 +164,8 @@ const CFG = {
                                 // then read in full; scoring every cell of every column is what
                                 // made a 200-row grid appear to hang.
   STATUS_MAX_GLYPHS: 6,
+  KICKOUT_LETTERS: 2,           // HS / HC / PS / PC — the letters before the kick-out hours
+  KICKOUT_MAX_DIGITS: 3,        // …and the most hours digits that suffix may carry
 
   /* --- Clustering status cells ---
    * Three branches, because colour must never be able to veto a merge of two

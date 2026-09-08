@@ -206,7 +206,7 @@ async function extractGrid(img, onProgress) {
   let clusters = [];
   if (statusCol) {
     clusters = clusterStatusCells(surf, statusCol.cells);
-    statusByRow = labelStatusClusters(clusters, statusCol.font);
+    statusByRow = labelStatusClusters(clusters, statusCol.font, surf);
     const merged = mergeSameCodeClusters(clusters);
     clusters = merged.clusters;
     for (const c of merged.contradictions) {

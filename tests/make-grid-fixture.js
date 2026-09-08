@@ -58,6 +58,11 @@ const STATUS_COLOR = {
   'A/I': '#0b6b3a',
   PEND: '#1565c0',
   CLSD: '#1a1a1a',
+  /* MRED prints the contingency codes in the same blue as PEND, whatever the
+   * kick-out hours — so the three below cannot be told apart by colour. */
+  HS48: '#1565c0',
+  HS120: '#1565c0',
+  HC24: '#1565c0',
 };
 
 const money = v => (v == null ? '' : '$' + v.toLocaleString('en-US'));
@@ -363,6 +368,17 @@ const VARIANTS = {
     const closed = LISTINGS.filter(l => l.stat === 'CLSD').slice(0, 11);
     const rows = actives.concat(closed).map((l, i) => ({ ...l, n: i + 1 }));
     write('grid-eleven-closed', renderGrid(rows), rows);
+  },
+
+  /* The contingency codes MRED prints with the kick-out hours appended. No
+   * whole-cell template can match HS48, so these are read as two letters plus
+   * digits — and the three of them share PEND's blue, so nothing but shape
+   * separates HS from HC. The buckets must come out identical to `grid`:
+   * FIN, A/I and PEND are all pending too, and only the codes have changed. */
+  'grid-kickout': () => {
+    const swap = { FIN: 'HS48', 'A/I': 'HC24', PEND: 'HS120' };
+    const rows = LISTINGS.map(l => (swap[l.stat] ? { ...l, stat: swap[l.stat] } : l));
+    write('grid-kickout', renderGrid(rows), rows);
   },
 
   /* A 2× (Retina) screenshot — every upscaled-pixel constant must rescale. */
