@@ -296,6 +296,196 @@ function clusterStatusCells(surf, cells) {
 }
 
 /**
+ * Turn one cluster's per-cell matches into a decision.
+ *
+ * Every member votes, so a cluster of twenty CLSD cells is one twenty-sample
+ * decision. The three bars are absolute rather than relative, which is what
+ * lets an unknown code be refused instead of named after whichever known code
+ * it least resembles.
+ *
+ * Returns { ranked, top, second, score, shape, margin, reject } with `reject`
+ * null only when every bar is cleared.
+ */
+function voteOnMatches(matches, memberCount) {
+  const combined = new Map();
+  const shapes = new Map();
+  let voters = 0;
+  for (const m of matches) {
+    if (!m) continue;
+    voters++;
+    for (const r of m.ranked) {
+      combined.set(r.text, (combined.get(r.text) || 0) + r.combined);
+      shapes.set(r.text, (shapes.get(r.text) || 0) + r.shape);
+    }
+  }
+
+  /* Divide by the members that actually voted, not by the cluster size: a
+   * member whose raster produced no match should not drag every candidate's
+   * mean down, because the floors are absolute. */
+  const denom = voters || 1;
+  const ranked = Array.from(combined.entries())
+    .map(([text, sum]) => ({ text, mean: sum / denom, shape: (shapes.get(text) || 0) / denom }))
+    .sort((a, b) => b.mean - a.mean);
+
+  const top = ranked[0];
+  const second = ranked[1];
+  const margin = second ? top.mean - second.mean : 1;
+  const needMargin = requiredMargin(top && top.text, second && second.text);
+
+  /* A one-cell cluster has no votes behind it, so it has to be clearer on
+   * its own — either by scoring higher, or by beating every one of the other
+   * codes by a wide margin, which is different evidence of the same
+   * strength. Insisting on the score alone would refuse a correct reading of
+   * a code that simply renders less like its template in this font. */
+  const decisive = margin >= CFG.STATUS_SINGLETON_MARGIN;
+  const floor = (memberCount === 1 && !decisive)
+    ? CFG.STATUS_SINGLETON_SCORE : CFG.STATUS_MIN_SCORE;
+
+  let reject = null;
+  if (!top) reject = 'no-candidates';
+  else if (top.shape < CFG.STATUS_ABS_SHAPE) reject = `shape ${top.shape.toFixed(2)} below floor`;
+  else if (top.mean < floor) reject = `score ${top.mean.toFixed(2)} below ${floor}`;
+  else if (margin < needMargin) reject = `margin ${margin.toFixed(3)} below ${needMargin}`;
+
+  return {
+    ranked, top, second, margin, reject,
+    score: top ? top.mean : 0,
+    shape: top ? top.shape : 0,
+  };
+}
+
+/**
+ * Is a kick-out suffix digits?
+ *
+ * Note what this does NOT do: read them. The hours move no row between
+ * buckets and enter no price, no median and no ratio — so printing HS124 for
+ * a cell that says HS120 buys nothing and puts a number on screen that
+ * contradicts the screenshot. The reported code is the base one, which is
+ * also what normalizeStatusCode() folds a hand-typed HS48 onto.
+ *
+ * What the digits are FOR is the gate. Two letters followed by something that
+ * is not a number is not a kick-out cell, and a clipped PCHG whose first two
+ * glyphs happen to read P and C must not become a pending PC.
+ *
+ * So the test is whether a digit is a CREDIBLE reading of each suffix glyph,
+ * not whether it wins outright. Bold O and 0 are the same shape — in Verdana
+ * they finish 0.011 apart — and demanding the digit win refuses HS120 over a
+ * coin toss. Nothing rides on which way that toss lands: a kick-out code is
+ * exactly two letters, so no letter reading of a suffix glyph spells a valid
+ * code either. A real letter is not close to any digit at all, which is the
+ * only distinction the gate has to make.
+ */
+function suffixIsDigits(surf, cells, font) {
+  const len = cells[0].token.tall.length;
+  for (let i = CFG.KICKOUT_LETTERS; i < len; i++) {
+    const matches = cells.map(cell => {
+      const g = cell.token.tall[i];
+      const raster = rasterizeBox(surf.gray, g.x, g.y, g.w, g.h);
+      return raster && matchWord(raster, STATUS_GLYPHS, font, CFG.SYNTH_WEIGHT);
+    });
+    const v = voteOnMatches(matches, cells.length);
+    if (!v.top) return false;
+    const digit = v.ranked.find(r => /^[0-9]$/.test(r.text));
+    if (!digit || digit.shape < CFG.STATUS_ABS_SHAPE) return false;
+    if (v.top.mean - digit.mean > CFG.STATUS_CONFUSABLE_MARGIN) return false;
+  }
+  return true;
+}
+
+/**
+ * Read the letters of a kick-out prefix, ONE GLYPH AT A TIME.
+ *
+ * The whole-cell matcher is the right reader for a closed vocabulary and the
+ * wrong one here. Correlated as a two-letter word, HS and HC share their first
+ * glyph, so half the stretched raster agrees whichever is right and the two
+ * finish 0.06 apart — under the margin a one-glyph confusion is required to
+ * clear, and the cell is refused. Ranked glyph by glyph, the second letter is
+ * S at 0.74 with C nowhere near it. The evidence was always there; averaging
+ * it against an identical H is what hid it.
+ *
+ * Every member of the cluster votes on every position, exactly as the
+ * whole-cell path does.
+ *
+ * Returns { code, score, shape, margin } or { reject }.
+ */
+function readKickoutLetters(surf, cells, font) {
+  const letters = [], votes = [];
+  for (let i = 0; i < CFG.KICKOUT_LETTERS; i++) {
+    const matches = cells.map(cell => {
+      const g = cell.token.tall[i];
+      const raster = rasterizeBox(surf.gray, g.x, g.y, g.w, g.h);
+      return raster && matchWord(raster, STATUS_GLYPHS, font, CFG.SYNTH_WEIGHT);
+    });
+    const v = voteOnMatches(matches, cells.length);
+    if (v.reject) return { reject: `letter ${i + 1} ${v.reject}` };
+    letters.push(v.top.text);
+    votes.push(v);
+  }
+
+  const code = letters.join('');
+  if (KICKOUT_CODES.indexOf(code) < 0) return { reject: `"${code}" is not a kick-out code` };
+
+  for (let i = 0; i < CFG.KICKOUT_LETTERS; i++) {
+    const mean = new Map(votes[i].ranked.map(r => [r.text, r.mean]));
+    for (const rival of kickoutRivals(code, i)) {
+      const gap = votes[i].top.mean - (mean.get(rival) || 0);
+      if (gap < CFG.STATUS_CONFUSABLE_MARGIN) {
+        return { reject: `letter ${i + 1} beats ${rival} by only ${gap.toFixed(3)}` };
+      }
+    }
+  }
+
+  /* The weakest glyph is the confidence in the code, not the best one. */
+  return {
+    code,
+    score: Math.min(...votes.map(v => v.score)),
+    shape: Math.min(...votes.map(v => v.shape)),
+    margin: Math.min(...votes.map(v => v.margin)),
+  };
+}
+
+/**
+ * Second chance for a cluster the whole-cell matcher refused: is it a code
+ * with kick-out hours appended?
+ *
+ * MRED writes the home-sale and home-close contingencies with the kick-out
+ * period stuck on the end — HS48, HC24 — and the period is whatever the
+ * listing agent typed, so there is no closed set of renderings for the whole
+ * cell to correlate against. The cell is split instead: every glyph is ranked
+ * against STATUS_GLYPHS — letters and digits alike, so neither half is told
+ * in advance what it is looking at — and the leading two must spell a code
+ * while the rest need only be credible as digits.
+ *
+ * Deliberately narrow. It runs only on a cluster already rejected, only when
+ * every member splits into two letters and one to three digits, and it keeps
+ * the reading only when the letters spell a kick-out code outright.
+ *
+ * Mutates `cl` and returns true when it claimed the cluster.
+ */
+function applyKickoutRead(cl, font, surf) {
+  if (!surf) return false;
+  const len = cl.members[0].token.tall.length;
+  if (len <= CFG.KICKOUT_LETTERS) return false;
+  if (len - CFG.KICKOUT_LETTERS > CFG.KICKOUT_MAX_DIGITS) return false;
+  /* Members are clustered on ink width, so they agree on glyph count in
+   * practice; one that does not cannot be voted on position by position. */
+  if (cl.members.some(cell => cell.token.tall.length !== len)) return false;
+  if (!suffixIsDigits(surf, cl.members, font)) return false;
+
+  const read = readKickoutLetters(surf, cl.members, font);
+  if (read.reject) { cl.kickoutReject = read.reject; return false; }
+
+  cl.code = read.code;
+  cl.score = read.score;
+  cl.shape = read.shape;
+  cl.margin = read.margin;
+  cl.ranked = [{ text: cl.code, mean: read.score, shape: read.shape }];
+  cl.reject = null;
+  cl.kickout = true;
+  return true;
+}
+
+/**
  * Label each cluster by the mean score of its members over the FULL candidate
  * list, and hand that label to every row in the cluster.
  *
@@ -304,63 +494,33 @@ function clusterStatusCells(surf, cells) {
  * surfaced as unreadable so an appraiser can name them, rather than being
  * filed under whatever happened to score highest.
  */
-function labelStatusClusters(clusters, font) {
+function labelStatusClusters(clusters, font, surf) {
   const byRow = new Map();
 
   for (const cl of clusters) {
-    const combined = new Map();
-    const shapes = new Map();
-    let voters = 0;
-    for (const cell of cl.members) {
-      const m = cell.match ||
-        (cell.match = matchWord(cell.raster, RECOGNIZED_TOKENS, font, CFG.SYNTH_WEIGHT));
-      if (!m) continue;
-      voters++;
-      for (const r of m.ranked) {
-        combined.set(r.text, (combined.get(r.text) || 0) + r.combined);
-        shapes.set(r.text, (shapes.get(r.text) || 0) + r.shape);
-      }
-    }
+    const matches = cl.members.map(cell =>
+      cell.match || (cell.match = matchWord(cell.raster, RECOGNIZED_TOKENS, font, CFG.SYNTH_WEIGHT)));
 
-    /* Divide by the members that actually voted, not by the cluster size: a
-     * member whose raster produced no match should not drag every candidate's
-     * mean down, because the floors are absolute. */
     const n = cl.members.length;
-    const denom = voters || 1;
-    const ranked = Array.from(combined.entries())
-      .map(([text, sum]) => ({ text, mean: sum / denom, shape: (shapes.get(text) || 0) / denom }))
-      .sort((a, b) => b.mean - a.mean);
+    const v = voteOnMatches(matches, n);
+    cl.ranked = v.ranked;
+    cl.score = v.score;
+    cl.shape = v.shape;
+    cl.margin = v.margin;
+    cl.reject = v.reject;
+    cl.code = v.reject ? null : v.top.text;
+    cl.kickout = false;
 
-    cl.ranked = ranked;
-    const top = ranked[0];
-    const second = ranked[1];
-    const margin = second ? top.mean - second.mean : 1;
-    const needMargin = requiredMargin(top && top.text, second && second.text);
-
-    /* A one-cell cluster has no votes behind it, so it has to be clearer on
-     * its own — either by scoring higher, or by beating every one of the other
-     * codes by a wide margin, which is different evidence of the same
-     * strength. Insisting on the score alone would refuse a correct reading of
-     * a code that simply renders less like its template in this font. */
-    const decisive = margin >= CFG.STATUS_SINGLETON_MARGIN;
-    const floor = (n === 1 && !decisive) ? CFG.STATUS_SINGLETON_SCORE : CFG.STATUS_MIN_SCORE;
-
-    cl.score = top ? top.mean : 0;
-    cl.shape = top ? top.shape : 0;
-    cl.margin = margin;
-    cl.code = null;
-    cl.reject = null;
-
-    if (!top) cl.reject = 'no-candidates';
-    else if (top.shape < CFG.STATUS_ABS_SHAPE) cl.reject = `shape ${top.shape.toFixed(2)} below floor`;
-    else if (top.mean < floor) cl.reject = `score ${top.mean.toFixed(2)} below ${floor}`;
-    else if (margin < needMargin) cl.reject = `margin ${margin.toFixed(3)} below ${needMargin}`;
-    else cl.code = top.text;
+    const whole = { code: cl.code, reject: cl.reject, second: v.second };
+    if (cl.reject) applyKickoutRead(cl, font, surf);
 
     console.log(`[Stat] cluster ×${n} ${colorHex(cl.color)} → ${cl.code || 'UNREADABLE'} ` +
+      (cl.kickout ? '(kick-out split) ' : '') +
       `(score ${cl.score.toFixed(3)}, shape ${cl.shape.toFixed(3)}, margin ${cl.margin.toFixed(3)}` +
-      (second ? `, runner-up ${second.text} ${second.mean.toFixed(3)}` : '') +
-      (cl.reject ? ` — rejected: ${cl.reject}` : '') + ')');
+      (cl.kickout ? `, whole cell rejected: ${whole.reject}`
+                  : (whole.second ? `, runner-up ${whole.second.text} ${whole.second.mean.toFixed(3)}` : '')) +
+      (cl.reject ? ` — rejected: ${cl.reject}` : '') +
+      (cl.kickoutReject ? `; not a kick-out code either: ${cl.kickoutReject}` : '') + ')');
 
     for (const cell of cl.members) {
       byRow.set(cell.row, {

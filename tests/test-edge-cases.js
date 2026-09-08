@@ -195,6 +195,33 @@ const CASES = [
     },
   },
   {
+    name: 'grid-kickout',
+    title: 'Contingency codes with kick-out hours — HS48 must read, not refuse',
+    run(check, res, truth) {
+      /* The regression this exists for: HS48 has a suffix no whole-cell
+       * template can match, so the cell was refused, the row landed in
+       * `unresolved`, and ONE unreadable row made the entire report
+       * provisional and disabled copying. */
+      check.eq('nothing was left unreadable', res.unresolved, 0);
+      check.ok('the summary is not provisional', res.provisional === false);
+      check.ok('the copied text carries no caveat', !/PROVISIONAL/.test(res.textOutput));
+
+      /* The hours are a gate, not a reading: the base code is what is
+       * reported, so a suffix misread cannot put a number on screen that
+       * contradicts the grid. */
+      const byN = new Map(res.rows.map(r => [r.n, r.status]));
+      check.eq('HS48 read as HS', byN.get(14), 'HS');
+      check.eq('HC24 is HC, not HS', byN.get(15), 'HC');
+      check.eq('a three-digit suffix reads too', byN.get(16), 'HS');
+
+      /* All three are pending, so the buckets must be byte-identical to the
+       * reference grid this fixture is a re-skin of. */
+      expectExact(check, res, truth, 'kickout');
+      check.ok('the kick-out flag reached the report',
+        res.warnings.some(w => /kick-out/i.test(w.text)));
+    },
+  },
+  {
     name: 'grid-hidpi',
     title: 'A 2× Retina screenshot — every pixel threshold must rescale',
     run(check, res, truth) {

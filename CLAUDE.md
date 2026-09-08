@@ -67,6 +67,38 @@ Both are load-bearing and both look like they should be per-cell:
    merge of two near-identical bitmaps (row shading moves anti-aliased ink a few
    RGB points), and must never *cause* one between different shapes.
 
+## A variable suffix is read in two halves, not two ways
+
+`HS48` has no fixed rendering, so no whole-cell template can match it. The cell
+is split: the two letters are matched glyph by glyph against `STATUS_ALPHABET`,
+and the suffix only has to prove it is digits. Three things about
+`applyKickoutRead` in `status.js` look optional and are not:
+
+- **Glyph by glyph, not as a two-letter word.** Correlated whole, `HS` and `HC`
+  share their first glyph, so half the stretched raster agrees whichever is
+  right and they finish 0.06 apart — under the one-glyph confusable margin, and
+  the cell is refused. Per glyph the second letter is `S` at 0.74 with `C`
+  nowhere near it. The evidence was always there; averaging it against an
+  identical `H` is what hid it.
+
+- **The hours are a gate, not a reading.** They move no row between buckets and
+  enter no price, median or ratio, so printing `HS124` for a cell that says
+  `HS120` is a number on screen contradicting the screenshot in exchange for
+  nothing. That is exactly the trade the top of this file forbids. `HS` is also
+  what `normalizeStatusCode` folds a hand-typed `HS48` onto, so the row table,
+  the mapping grid and the copied report all agree.
+
+- **A digit only has to be CREDIBLE at each suffix position, not win.** Bold `O`
+  and `0` are the same shape — in Verdana they finish 0.011 apart — and
+  demanding the digit win loses `HS120` on a coin toss. Nothing rides on the
+  toss: a kick-out code is exactly two letters, so no letter reading of a suffix
+  glyph spells a valid code either. What the gate must catch is a suffix that is
+  confidently letters, i.e. a clipped `PCHG` becoming a pending `PC`.
+
+The strict margin is spent where it buys something: `kickoutRivals` names only
+the substitutions that would spell a DIFFERENT kick-out code, because those are
+the only misreads that move a bucket and still get accepted.
+
 ## Confidence is per role
 
 `roles.methodBy` records how each of list / orig / sold / conc was decided
@@ -153,5 +185,5 @@ console log traces each decision (`[Grid]`, `[Header]`, `[Stat]`, `[Money]`).
 - Duplicate detection keys on the MLS number. The duplicate an appraiser
   actually hits — one property relisted under a new number — needs the address
   columns, which the app does not read.
-- `HS**` / `HC**` (kick-out hours) normalize to their base code but are not in
-  the OCR vocabulary, because the suffix varies. They can be set by hand.
+- `HS**` / `HC**` are reported as `HS` / `HC`. The hours are read only far
+  enough to prove they are digits, never far enough to print — see below.

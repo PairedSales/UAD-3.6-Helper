@@ -9,11 +9,14 @@
 /* extra candidate is one more near-tie for the matcher to lose on, so a     */
 /* padded vocabulary makes the real codes LESS reliable, not more.           */
 /*                                                                          */
-/* Two tiers:                                                               */
-/*   RECOGNIZED_TOKENS — what the image recognizer may emit.                */
+/* Three tiers:                                                             */
+/*   RECOGNIZED_TOKENS — what the whole-cell matcher may emit.              */
+/*   KICKOUT_CODES     — codes MRED renders with a variable suffix (HS72,   */
+/*                       HC24). No whole-cell template can match one, so a  */
+/*                       refused cell is split: the letters read glyph by   */
+/*                       glyph, the suffix only proving it is digits.       */
 /*   STATUS_CODES      — everything the mapping editor knows and the user    */
-/*                       may assign by hand, including codes that carry a    */
-/*                       variable suffix (HS72, HC24) no template can match. */
+/*                       may assign by hand.                                */
 /* ===================================================================== */
 
 /* Buckets the app reports on.
@@ -95,14 +98,19 @@ const STATUS_CODES = [
     flag: 'Short sales are frequently not arm’s-length for value purposes.',
     note: 'Under contract, awaiting lienholder approval.' },
   { code: 'HS', name: 'Home Sale Contingency', bucket: 'pending', given: false, ocr: false,
+    kickout: true,
     flag: 'Seller keeps a kick-out clause and is still soliciting offers — ' +
           'the most defensible “still active” contingency.',
-    note: 'Renders with the kick-out hours appended, e.g. HS72.' },
+    note: 'Renders with the kick-out hours appended, e.g. HS72. Read as HS: the hours ' +
+          'change no bucket, so they are proved to be digits but never printed.' },
   { code: 'HC', name: 'Home Close Contingency', bucket: 'pending', given: false, ocr: false,
-    note: 'Renders with the kick-out hours appended, e.g. HC24.' },
+    kickout: true,
+    note: 'Renders with the kick-out hours appended, e.g. HC24. Read as HC.' },
   { code: 'PS', name: 'Commercial Property Sale', bucket: 'pending', given: false, ocr: false,
+    kickout: true,
     note: 'Commercial analogue of HS.' },
   { code: 'PC', name: 'Commercial Property Close', bucket: 'pending', given: false, ocr: false,
+    kickout: true,
     note: 'Commercial analogue of HC.' },
 
   /* --- Closed: MRED §2.5(j) --- */
@@ -128,8 +136,57 @@ const STATUS_CODES = [
 const STATUS_BY_CODE = {};
 for (const s of STATUS_CODES) STATUS_BY_CODE[s.code] = s;
 
-/** The closed set the image recognizer is allowed to choose from. */
+/** The closed set the whole-cell matcher is allowed to choose from. */
 const RECOGNIZED_TOKENS = STATUS_CODES.filter(s => s.ocr).map(s => s.code);
+
+/**
+ * Codes MRED prints with the kick-out period stuck on the end — HS48, HC24 —
+ * where the period is whatever hours the listing agent typed. There is no
+ * closed set of renderings to correlate against, so these cells are read in
+ * two parts: the letters as a word, the suffix as digits. See src/status.js.
+ */
+const KICKOUT_CODES = STATUS_CODES.filter(s => s.kickout).map(s => s.code);
+
+/**
+ * Every letter that appears in a status code.
+ *
+ * The kick-out prefix is read one glyph at a time, and each glyph is ranked
+ * against this whole set rather than against the four letters that would suit
+ * the answer. A glyph that is really a B wins as B, spells nothing, and is
+ * refused — which is the open-set guard the closed vocabulary gives the
+ * whole-cell matcher for free.
+ */
+const STATUS_ALPHABET = Array.from(new Set(
+  STATUS_CODES.map(s => s.code).join('').split('').filter(c => /[A-Z]/.test(c)))).sort();
+
+/**
+ * Everything a glyph inside a status cell may be: a letter of some code, or a
+ * digit of a kick-out period.
+ *
+ * The suffix is proved to be a number against THIS set rather than against
+ * the digit bank, because the bank is a fixed bitmap set calibrated on the
+ * regular-weight digits of a price column and the Stat column is bold. Ranked
+ * here, both alternatives are synthesized in the screenshot's own font at the
+ * weight it is actually printed in, and the only question asked is the one
+ * that matters: letter or digit.
+ */
+const STATUS_GLYPHS = STATUS_ALPHABET.concat('0123456789'.split(''));
+
+/**
+ * The letters that, substituted at position `i` of `code`, would spell a
+ * DIFFERENT kick-out code.
+ *
+ * Those substitutions are the only ones that can move a row to another bucket
+ * and still be accepted — every other misread spells something that is not a
+ * code at all and is refused on that alone. So they are where the strict
+ * one-glyph margin is spent, rather than on the runner-up whatever it is.
+ */
+function kickoutRivals(code, i) {
+  return KICKOUT_CODES
+    .filter(c => c !== code && c.length === code.length &&
+                 c.split('').every((ch, j) => j === i || ch === code[j]))
+    .map(c => c[i]);
+}
 
 /** Everything a user may assign by hand. */
 const STATUS_TOKENS = STATUS_CODES.map(s => s.code);
@@ -141,6 +198,9 @@ const STATUS_TOKENS = STATUS_CODES.map(s => s.code);
 const CONFUSABLE_STATUS_PAIRS = [
   ['CTGA', 'CTGO'], ['HS', 'HC'], ['PS', 'PC'],
   ['ACTV', 'AUCT'], ['PEND', 'PCHG'], ['CANC', 'CTG'],
+  /* The kick-out letters are matched two glyphs at a time, which puts them in
+   * reach of the only other two-letter code in the vocabulary. */
+  ['HS', 'SS'], ['PS', 'SS'], ['HC', 'SS'], ['PC', 'SS'],
 ];
 
 /**
@@ -216,7 +276,8 @@ function bucketForStatus(code, mapping) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     BUCKETS, REPORTED_BUCKETS, BUCKET_PRICE_SOURCE, STATUS_CODES, STATUS_BY_CODE,
-    RECOGNIZED_TOKENS, STATUS_TOKENS, CONFUSABLE_STATUS_PAIRS, HEADER_LABELS,
+    RECOGNIZED_TOKENS, KICKOUT_CODES, STATUS_ALPHABET, STATUS_GLYPHS, kickoutRivals,
+    STATUS_TOKENS, CONFUSABLE_STATUS_PAIRS, HEADER_LABELS,
     ANCHOR_HEADER_ROLES, defaultStatusMapping, bucketForStatus,
     normalizeStatusCode,
   };

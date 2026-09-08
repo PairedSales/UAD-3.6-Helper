@@ -138,7 +138,11 @@ and about a second from paste to summary.
 6. **Status** — the `Stat` cell is matched as a whole token against the closed
    MRED vocabulary. Cells are then clustered by shape and ink colour and
    labelled once per cluster, so twenty-one `CLSD` cells are one twenty-one-vote
-   decision rather than twenty-one coin flips.
+   decision rather than twenty-one coin flips. The contingency codes MRED
+   prints with the kick-out hours appended — `HS48`, `HC24` — have no fixed
+   rendering to match, so a refused cell gets one more try split in two: the
+   letters read glyph by glyph, the suffix only proving it is digits. They are
+   reported as `HS` and `HC`; the hours change no bucket and are not printed.
 7. **Prices** — read glyph-by-glyph against a bank built from real connectMLS
    pixels. Whether a column carries a leading `$` is decided for the whole
    column at once: at 11px the dollar sign loses its stem to binarization and
@@ -195,6 +199,7 @@ expected numbers cannot drift apart.
 | `grid-hidpi` | A 2× Retina paste gives identical buckets |
 | `grid-clipped-top` / `-bottom` | A sliced row is excluded, not misread |
 | `grid-blank-stat` | A blank Stat cell keeps its listing, and blocks the copy |
+| `grid-kickout` | `HS48` / `HC24` / `HS120` read, and bucket as `HS` / `HC` |
 | `grid-few-closed` / `-eleven-closed` | The comp list appears at 10 and not at 11 |
 | `grid-wide-range` | Prices from $87k to $2.1M |
 
