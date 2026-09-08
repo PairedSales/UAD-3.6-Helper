@@ -649,6 +649,204 @@ body::before {
 /*  Built from the tokens above; no second palette.                       */
 /* ===================================================================== */
 
+/* ===================================================================== */
+/*  The UAD 3.6 form panel                                               */
+/*                                                                       */
+/*  Laid out the way the form lays its own section out: two columns, the */
+/*  active listings and pending sales on the left, the sales within the  */
+/*  lookback period and the distress question on the right. Recognising  */
+/*  the shape of the thing you are filling in is most of what makes      */
+/*  transcribing it quick.                                               */
+/* ===================================================================== */
+
+.uad-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+/* The form's own arrangement: Active over Pending on the left, Sales over
+ * Distressed on the right. Explicit placement rather than source order, so the
+ * text output can keep the reading order the form prints in. */
+.uad-group--active     { grid-column: 1; grid-row: 1; }
+.uad-group--pending    { grid-column: 1; grid-row: 2; }
+.uad-group--sales      { grid-column: 2; grid-row: 1; }
+.uad-group--distressed { grid-column: 2; grid-row: 2; }
+
+@media (max-width: 720px) {
+  .uad-grid { grid-template-columns: 1fr; }
+  .uad-group--active,
+  .uad-group--pending,
+  .uad-group--sales,
+  .uad-group--distressed { grid-column: 1; grid-row: auto; }
+}
+
+.uad-group {
+  --tone: var(--accent);
+  --tone-dim: var(--accent-dim);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--tone-dim);
+  padding: 0.85rem 0.95rem 0.9rem;
+}
+
+.uad-group--active  { --tone: var(--bucket-active);  --tone-dim: var(--bucket-active-dim); }
+.uad-group--pending { --tone: var(--bucket-pending); --tone-dim: var(--bucket-pending-dim); }
+.uad-group--sales   { --tone: var(--bucket-closed);  --tone-dim: var(--bucket-closed-dim); }
+
+.uad-group__title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tone);
+  margin-bottom: 0.55rem;
+}
+
+/* label | value | note-under-both */
+.uad-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  padding: 0.28rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.uad-field:first-of-type { border-top: none; }
+
+.uad-field__label {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  opacity: 0.8;
+}
+
+/* The value IS the button. A number you can click is a smaller target to
+ * explain than a number with a button beside it, and this panel is read as a
+ * list of values rather than as a list of controls. */
+.uad-field__value {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition),
+              color var(--transition);
+}
+
+.uad-field__value:hover:not(:disabled) {
+  border-color: var(--tone);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.uad-field__value:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A disabled field is disabled for one of two reasons — nothing was read, or
+ * the reading is provisional — and the title says which. It must not look like
+ * a value you simply have not clicked yet. */
+.uad-field__value:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.uad-field__value.is-copied {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.uad-field__value.is-copied::after {
+  content: "copied";
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 3px);
+  font-family: var(--font-body);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--success);
+}
+
+.uad-field__value--static {
+  cursor: default;
+  background: none;
+  border-style: dashed;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.uad-field__unit {
+  font-family: var(--font-body);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+}
+
+.uad-field__input {
+  width: 5.2em;
+  text-align: right;
+  font-size: 0.9rem;
+  padding: 0.24rem 0.45rem;
+}
+
+/* The form prints the unit outside its input; so does this. */
+.uad-field__pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.uad-field__input.is-invalid { border-color: var(--error); }
+
+.uad-field__note {
+  grid-column: 1 / -1;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  opacity: 0.45;
+}
+
+/* A field the app did not read. Dashed, so "you typed this" and "we read this"
+ * are never the same thing on a page whose whole point is provenance. */
+.uad-field--yours .uad-field__label { font-style: italic; }
+.uad-field--yours .uad-field__note { opacity: 0.6; color: var(--accent); }
+.uad-field--empty .uad-field__label { opacity: 0.5; }
+
+.uad-provisional {
+  margin-bottom: 0.9rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid rgba(255, 184, 108, 0.3);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 184, 108, 0.1);
+  color: var(--warning);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.uad-live {
+  font-size: 0.72rem;
+  color: var(--success);
+  margin-left: 0.7rem;
+  align-self: center;
+}
+
+.field--days { width: 4.2em; text-align: right; }
+
+.stat-card__note--quiet { color: var(--text-primary); opacity: 0.45; }
+
 /* ===== Bucket Summary Cards ===== */
 .summary-grid {
   display: grid;

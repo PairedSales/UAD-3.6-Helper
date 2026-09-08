@@ -221,8 +221,8 @@ function normalizeStatusCode(raw) {
 
 /**
  * Header labels the column identifier can recognize, and the role each
- * implies. Roles the app acts on are 'status', 'list', 'sold', 'orig' and
- * 'conc'; the rest are decoys, named so a column can be positively ruled out
+ * implies. Roles the app acts on are 'status', 'list', 'sold', 'orig', 'conc'
+ * and 'mt'; the rest are decoys, named so a column can be positively ruled out
  * rather than merely failing to match.
  */
 const HEADER_LABELS = [
@@ -243,7 +243,12 @@ const HEADER_LABELS = [
   { text: 'Street #',        role: 'text'   },
   { text: 'Str Name',        role: 'text'   },
   { text: 'Sfx',             role: 'text'   },
-  { text: 'MT',              role: 'num'    },
+  /* Market time — connectMLS's days-on-market. A column of one- to three-digit
+   * integers, which is the same shape as '# Rms', 'Yr Blt', 'All Beds' and
+   * 'ASF'; nothing but the header label tells them apart, so nothing but the
+   * header label is allowed to bind it. See readMarketTimeColumn in grid.js. */
+  { text: 'MT',              role: 'mt'     },
+  { text: 'Market Time',     role: 'mt'     },
   { text: '# Rms',           role: 'num'    },
   { text: 'ASF',             role: 'num'    },
   { text: 'Yr Blt',          role: 'num'    },

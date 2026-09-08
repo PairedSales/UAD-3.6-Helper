@@ -20,9 +20,20 @@ Concretely, do not undo any of these without a very good reason:
 - Unreadable statuses land in `unresolved`, never in a bucket — and a row is
   only ever DISCARDED when it has no status, no price, no MLS number and no row
   number. Anything less and it is a listing whose Stat glyph did not survive.
-- Any unresolved row makes the report provisional and disables copy. The
-  provisional banner is written into the copied text too, so select-and-copy
+- Any unresolved row makes the report provisional and disables copy — the
+  per-field copy buttons on the form panel included, because a bare number has
+  nowhere to carry a caveat. The provisional banner is written into the copied
+  text too — the narrative block AND the form-field block — so select-and-copy
   cannot escape it.
+- Market time is bound by the header label `MT` and by nothing else. It is a
+  column of one- to three-digit integers, indistinguishable in the data from
+  `# Rms`, `Yr Blt`, `All Beds`, `ASF` and `# Garage`; `CFG.MT_MAX_DAYS` is not
+  a second guard and must not be described as one, since every year in a
+  `Yr Blt` column clears it. No `MT` header, no days on market.
+- The two fields the app cannot source — the lookback period and the distress
+  question — stay unsourced. The lookback period is typed by the user and
+  marked as theirs; the distress question gets the SS count and the caveat that
+  REO, relocation and estate sales carry no code, never a Yes or a No.
 - Every skipped row increments a named counter that reaches the UI, and the
   green "no rows were dropped" tick is gated on all of them being zero.
 - The row-number cross-check compares against the rows that reached the REPORT,
@@ -49,8 +60,20 @@ Every horizontal threshold must be a multiple of `surf.glyphW` (the screenshot's
 own glyph width) or `surf.medH`, never a pixel constant. A fixed constant is
 correct at exactly one zoom level and one DPI, and fails *partially* elsewhere —
 some glyphs split and others do not, which produces plausible wrong numbers
-rather than an obvious failure. `CFG.TOKEN_GAP_GLYPHS` and
-`CFG.GLYPH_SPLIT_RATIO` exist because of this.
+rather than an obvious failure. `CFG.TOKEN_GAP_GLYPHS`,
+`CFG.GLYPH_SPLIT_RATIO` and `CFG.COLUMN_GAP_GLYPHS` exist because of this.
+
+The last of those is the subtlest. `buildCompactSurface` draws a gutter between
+the strips it lays side by side, and that gutter has to be WIDER than the gap
+that ends a token — or the last cell of one column and the first cell of the
+next come back as a single token. The token gap is measured in glyph widths, so
+the gutter has to be too: as a source-pixel constant it was correct at 11px
+text and crossed over at around a 16px glyph, which a Retina paste at browser
+zoom reaches. Note that the same number used to do a second, unrelated job —
+deciding whether two source ranges are close enough to crop as one — and that
+one is still `CFG.COLUMN_GAP_SRC` in source pixels, on purpose: widening it
+fuses more ranges, and a fused range is drawn from the source verbatim, which
+copies the ink of columns that were deliberately not kept.
 
 ## Two decisions that are made per-column, not per-cell
 
@@ -149,6 +172,27 @@ thousands separator at any length, so `readIntegerToken` enforces comma grouping
 only when separators are actually present. `readPriceToken` still requires one,
 because a dollar amount without a separator is a fragment.
 
+## The form panel is the deliverable
+
+`uadFields()` in `stats.js` returns the UAD 3.6 "Search Result Metrics" section
+field for field, in the form's own order. It is the ONE source for both the
+on-screen panel (`renderUad` in `app.js`) and the copied text
+(`uadFieldsAsText`). Do not grow a second field list in the UI layer: two
+renderers formatting the same summary is how the screen and the clipboard come
+to disagree about a number, and the number here goes into an appraisal.
+
+Each field carries a `value` and a `display`, and they are different on purpose.
+`value` is what reaches the clipboard: the bare number the form's input takes,
+`189900`. `display` is `$189,900`, so a figure can be checked against the
+screenshot at a glance. The form draws the `$` outside the box and groups the
+digits itself.
+
+One more thing that looks like a detail and is not: the lookback input's
+`change` handler must not call `recompute()`. That rebuilds the panel the input
+lives in, and since `change` fires on blur, clicking a copy button straight
+after typing would destroy the button between mousedown and mouseup — the first
+copy after entering a lookback period would silently do nothing.
+
 ## The comp list
 
 At or below `CFG.COMP_LIST_MAX` closed sales, every sale-to-list ratio is quoted
@@ -187,3 +231,10 @@ console log traces each decision (`[Grid]`, `[Header]`, `[Stat]`, `[Money]`).
   columns, which the app does not read.
 - `HS**` / `HC**` are reported as `HS` / `HC`. The hours are read only far
   enough to prove they are digits, never far enough to print — see below.
+- Without an `MT` header there is no days on market at all, and a grid whose
+  layout calls that column something else gets the same answer. Widening the
+  label list is one more near-tie for the whole-word matcher, which is the
+  trade `vocab.js` already refuses for status codes.
+- connectMLS's `MT` on a closed row is the time that sale was marketed and on
+  an active row it is days on market so far. The app never pools the two: each
+  bucket's median is of its own rows, and only the active one feeds the form.

@@ -1,5 +1,5 @@
 {
-  "name": "grid-selected",
+  "name": "grid-blank-mt",
   "listings": [
     {
       "n": 1,
@@ -268,10 +268,10 @@
       "high": 269900,
       "median": 229500,
       "marketTime": {
-        "count": 13,
+        "count": 12,
         "low": 4,
         "high": 403,
-        "median": 101
+        "median": 84
       },
       "ratio": null
     },
@@ -316,6 +316,8 @@
     }
   },
   "opts": {
-    "selectedRow": 8
+    "blankMt": [
+      5
+    ]
   }
 }
