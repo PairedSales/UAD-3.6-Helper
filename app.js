@@ -16,6 +16,7 @@ const dropZone     = $('#drop-zone');
 const fileInput    = $('#file-input');
 const previewWrap  = $('#preview-wrapper');
 const previewImg   = $('#preview-img');
+const previewFile  = $('#preview-file');
 const clearBtn     = $('#clear-btn');
 const extractBtn   = $('#extract-btn');
 const outputBox    = $('#output-box');
@@ -49,7 +50,9 @@ const appContainer = $('.app-container');
 const appFooter    = $('.app-footer');
 
 /* ---- State ---- */
-let currentImageBlob = null;
+/* What is being read: { kind: 'image', blob } for a screenshot, or
+ * { kind: 'table', text, name, encoding } for a CSV / TSV export. */
+let currentInput = null;
 let lastResult = null;      /* raw pipeline output */
 let rows = [];              /* editable working copy */
 let statusMapping = defaultStatusMapping();
@@ -61,23 +64,43 @@ let lastReport = null;
 let runToken = 0;
 
 /* ================================================================== */
-/*  Image input                                                        */
+/*  Input: a screenshot, or an export                                  */
 /* ================================================================== */
 
 document.addEventListener('paste', (e) => {
-  const items = e.clipboardData && e.clipboardData.items;
-  if (!items) return;
-  for (const item of items) {
+  const data = e.clipboardData;
+  if (!data) return;
+  for (const item of data.items || []) {
     if (item.type.startsWith('image/')) {
       e.preventDefault();
       handleImageFile(item.getAsFile());
       return;
     }
   }
+  /* A file copied in Explorer or Finder arrives as a file, not as text. */
+  for (const file of data.files || []) {
+    if (isTableFile(file)) {
+      e.preventDefault();
+      handleTableFile(file);
+      return;
+    }
+  }
+  /* Cells copied out of a spreadsheet arrive as tab-separated text. Only taken
+   * when it has a header this app recognizes, and never from a paste into one
+   * of the review table's own fields — that is somebody typing a price. */
+  const target = e.target;
+  if (target && target.closest && target.closest('input, textarea, select')) return;
+  const text = data.getData('text/plain');
+  if (text && looksLikeTable(text)) {
+    e.preventDefault();
+    handleTableText(text, 'pasted table');
+  }
 });
 
 fileInput.addEventListener('change', () => {
-  if (fileInput.files.length > 0) handleImageFile(fileInput.files[0]);
+  if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+  /* Cleared so choosing the same file again — after fixing it — fires again. */
+  fileInput.value = '';
 });
 
 dropZone.addEventListener('dragover', (e) => {
@@ -88,7 +111,7 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-ove
 dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
   dropZone.classList.remove('drag-over');
-  if (e.dataTransfer.files.length > 0) handleImageFile(e.dataTransfer.files[0]);
+  if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
 });
 
 clearBtn.addEventListener('click', resetState);
@@ -143,25 +166,86 @@ uadCopyAll.addEventListener('click', async () => {
   }, 1600);
 });
 
+/** A dropped or chosen file: a screenshot or an export, told apart here. */
+function handleFile(file) {
+  if (!file) return;
+  if (file.type && file.type.startsWith('image/')) return handleImageFile(file);
+  if (isTableFile(file)) return handleTableFile(file);
+  showStatus(
+    /\.xlsx?$/i.test(file.name || '')
+      ? 'An Excel workbook cannot be read directly. Save it as CSV (or export the search as CSV ' +
+        'or TSV) and drop that in instead.'
+      : 'That is neither a screenshot nor an export. Paste a PNG or JPG screenshot, or drop in a ' +
+        '.csv or .tsv file.',
+    'error');
+}
+
+/** Export files, by extension first — Windows often reports a .tsv with no type at all. */
+function isTableFile(file) {
+  if (!file) return false;
+  if (/\.(csv|tsv|tab|txt)$/i.test(file.name || '')) return true;
+  return /^text\/(csv|tab-separated-values|plain)$/i.test(file.type || '');
+}
+
+/**
+ * Corrections are work. A stray Ctrl+V anywhere on the page would otherwise
+ * throw them away silently, and there is no undo.
+ */
+function confirmDiscardEdits(what) {
+  const edits = rows.filter(r => r.edited || r.omit).length;
+  return edits === 0 || window.confirm(
+    `You have corrected ${edits} row${edits === 1 ? '' : 's'} by hand. ` +
+    `Replacing the ${what} discards those corrections. Continue?`);
+}
+
 function handleImageFile(file) {
   if (!file || !file.type.startsWith('image/')) {
     showStatus('That does not look like an image. Paste a PNG or JPG screenshot.', 'error');
     return;
   }
-
-  /* Corrections are work. A stray Ctrl+V anywhere on the page would otherwise
-   * throw them away silently, and there is no undo. */
-  const edits = rows.filter(r => r.edited || r.omit).length;
-  if (edits > 0 && !window.confirm(
-    `You have corrected ${edits} row${edits === 1 ? '' : 's'} by hand. ` +
-    `Replacing the screenshot discards those corrections. Continue?`)) {
-    return;
-  }
+  if (!confirmDiscardEdits('screenshot')) return;
 
   if (previewImg.src && previewImg.src.startsWith('blob:')) URL.revokeObjectURL(previewImg.src);
   resetResults();
-  currentImageBlob = file;
+  currentInput = { kind: 'image', blob: file };
   previewImg.src = URL.createObjectURL(file);
+  previewImg.classList.remove('hidden');
+  previewFile.classList.add('hidden');
+  previewWrap.classList.remove('hidden');
+  extractBtn.disabled = false;
+  clearStatus();
+  runAnalysis();
+}
+
+async function handleTableFile(file) {
+  if (file.size > TABLE_MAX_BYTES) {
+    showStatus(`${file.name} is ${(file.size / 1048576).toFixed(0)} MB — far larger than an MLS ` +
+               `export. Check that this is the right file.`, 'error');
+    return;
+  }
+  let decoded;
+  try {
+    decoded = decodeTableBytes(new Uint8Array(await file.arrayBuffer()));
+  } catch (err) {
+    showStatus(`${file.name} could not be opened: ${err.message || err}`, 'error');
+    return;
+  }
+  handleTableText(decoded.text, file.name, decoded.encoding);
+}
+
+function handleTableText(text, name, encoding) {
+  if (!confirmDiscardEdits(currentInput && currentInput.kind === 'table' ? 'file' : 'screenshot')) return;
+
+  if (previewImg.src && previewImg.src.startsWith('blob:')) URL.revokeObjectURL(previewImg.src);
+  resetResults();
+  currentInput = { kind: 'table', text, name, encoding: encoding || null };
+  previewImg.removeAttribute('src');
+  previewImg.classList.add('hidden');
+  previewFile.classList.remove('hidden');
+  previewFile.innerHTML = '';
+  const strong = document.createElement('strong');
+  strong.textContent = name;
+  previewFile.append(strong, document.createTextNode(' — an export, read as text.'));
   previewWrap.classList.remove('hidden');
   extractBtn.disabled = false;
   clearStatus();
@@ -183,8 +267,10 @@ function resetResults() {
 
 function resetState() {
   placeInputCard('top');
-  currentImageBlob = null;
-  previewImg.src = '';
+  currentInput = null;
+  previewImg.removeAttribute('src');
+  previewFile.innerHTML = '';
+  previewFile.classList.add('hidden');
   previewWrap.classList.add('hidden');
   extractBtn.disabled = true;
   fileInput.value = '';
@@ -219,11 +305,11 @@ function revealSummary() {
 /* ================================================================== */
 
 async function runAnalysis() {
-  if (!currentImageBlob) return;
+  if (!currentInput) return;
 
   const token = ++runToken;
   const stale = () => token !== runToken;
-  const blob = currentImageBlob;
+  const input = currentInput;
 
   extractBtn.disabled = true;
   resetResults();
@@ -235,15 +321,22 @@ async function runAnalysis() {
   const t0 = performance.now();
 
   try {
-    const img = await decodeImage(blob);
-    if (stale()) return;
-    const result = await extractGrid(img, (pct, msg) => { if (!stale()) setProgress(pct, msg); });
+    let result;
+    if (input.kind === 'table') {
+      setProgress(40, 'Reading the export…');
+      result = extractTable(input.text, input.name, { encoding: input.encoding });
+    } else {
+      const img = await decodeImage(input.blob);
+      if (stale()) return;
+      result = await extractGrid(img, (pct, msg) => { if (!stale()) setProgress(pct, msg); });
+    }
     if (stale()) return;
     perf.total = performance.now() - t0;
 
     lastResult = result;
     rows = result.rows.map((r, i) => ({
       n: i + 1,
+      line: r.line || null,
       index: r.index,
       mls: r.mls,
       status: r.status,
@@ -269,7 +362,8 @@ async function runAnalysis() {
       placeInputCard('top');
       renderNotices(result.warnings || []);
       summaryGrid.innerHTML = '';
-      showStatus('No listings could be read from this image.', 'error');
+      showStatus(`No listings could be read from this ${input.kind === 'table' ? 'file' : 'image'}.`,
+        'error');
       setProgress(100, 'Done');
       return;
     }
@@ -283,9 +377,18 @@ async function runAnalysis() {
     renderColumns(result);
     recompute();
 
-    renderDebugOverlay($('#debug-canvas'), result);
-    renderDebugClusters($('#debug-clusters'), result);
-    renderDebugPerf($('#debug-perf'), result, perf);
+    const canvas = $('#debug-canvas');
+    const clustersEl = $('#debug-clusters');
+    const isFile = result.source === 'file';
+    canvas.classList.toggle('hidden', isFile);
+    clustersEl.classList.toggle('hidden', isFile);
+    if (isFile) {
+      renderDebugTable($('#debug-perf'), result, perf);
+    } else {
+      renderDebugOverlay(canvas, result);
+      renderDebugClusters(clustersEl, result);
+      renderDebugPerf($('#debug-perf'), result, perf);
+    }
 
     setProgress(100, 'Done');
     const s = lastReport.summary;
@@ -298,11 +401,12 @@ async function runAnalysis() {
     if (stale()) return;
     placeInputCard('top');
     console.error(err);
-    showStatus(`Analysis failed: ${err.message || 'the image could not be read'}`, 'error');
+    showStatus(`Analysis failed: ${err.message ||
+      (input.kind === 'table' ? 'the file could not be read' : 'the image could not be read')}`, 'error');
     setProgress(100, 'Failed');
   } finally {
     if (!stale()) {
-      extractBtn.disabled = !currentImageBlob;
+      extractBtn.disabled = !currentInput;
       setTimeout(() => { if (!stale()) progressWrap.classList.add('hidden'); }, 900);
     }
   }
@@ -385,7 +489,7 @@ function renderNotices(warnings) {
     all.unshift({
       level: 'warn',
       text: `${lastReport.summary.unclassified.count} row(s) carry a status code this app does ` +
-            `not recognize. Set them in the table below, or add the code to the mapping.`,
+            `not recognize. Set a status for each of them in the table below.`,
     });
   }
 
@@ -522,6 +626,7 @@ function statLine(key, val, emphasize) {
 
 function renderColumns(result) {
   columnMap.innerHTML = '';
+  if (result.source === 'file') return renderFileColumns(result);
   const roles = result.roles || {};
   const surf = result.surf;
   const px = v => Math.round(compactToSourceX(surf, v));
@@ -576,6 +681,52 @@ function renderColumns(result) {
     (summary[roles.method] || 'Columns could not be identified.') +
     ` Confidence ${(100 * (roles.confidence || 0)).toFixed(0)}%.` +
     (roles.notes && roles.notes.length ? ' ' + roles.notes.join(' ') : '');
+}
+
+/**
+ * The column map for an export: which heading each role was read from.
+ *
+ * Nothing here was inferred, so there is no provenance to grade — but the
+ * heading is still worth showing, because "Current Price" feeding the list
+ * price is a decision the appraiser should be able to see was made.
+ */
+function renderFileColumns(result) {
+  const cols = result.columns || {};
+  const counts = result.valueCounts || {};
+  const ambiguous = new Map((result.ambiguous || []).map(a => [a.role, a.labels]));
+
+  const line = (label, role, extra) => {
+    const row = document.createElement('div');
+    row.className = 'column-map__row';
+    const c = cols[role];
+    const where = c
+      ? `column ${c.index + 1}, “${c.label}” — ${counts[role] || 0} value(s)`
+      : ambiguous.has(role)
+        ? `not used — ${ambiguous.get(role).map(l => `“${l}”`).join(' and ')} both claim it`
+        : 'not in this file';
+    row.innerHTML =
+      `<span class="column-map__role"></span><span></span>` +
+      (c ? '<span class="column-map__how">named by the header</span>' : '') +
+      (extra ? '<span class="column-map__how"></span>' : '');
+    row.children[0].textContent = label;
+    row.children[1].textContent = where;
+    if (extra) row.lastElementChild.textContent = extra;
+    columnMap.appendChild(row);
+  };
+
+  line('Status', 'status', 'decides the bucket');
+  line('List price', 'list', 'feeds active + pending');
+  line('Orig list price', 'orig', 'denominator of the sale/list ratio');
+  line('Sold price', 'sold', 'feeds closed sales');
+  line('Concessions', 'conc', 'subtracted from the sold price in the ratio');
+  line('Market time', 'mt', 'feeds median days on market');
+  line('MLS #', 'mls', 'duplicate check');
+
+  columnsNote.textContent =
+    `Read from ${result.fileName} as ${result.delimiter}-separated text` +
+    (result.encoding ? ` (${result.encoding})` : '') +
+    `. Every column below was named by the file’s own header row, on line ${result.headerLine}; ` +
+    `nothing was inferred, and a column no heading names was not read.`;
 }
 
 function renderMapping() {
@@ -658,7 +809,9 @@ function renderReview(report) {
     useTd.appendChild(use);
     tr.appendChild(useTd);
 
-    tr.appendChild(cell(row.index != null ? String(row.index) : String(row.n), 'num dim'));
+    const numTd = cell(row.index != null ? String(row.index) : String(row.n), 'num dim');
+    if (row.line) numTd.title = `Line ${row.line} of the file`;
+    tr.appendChild(numTd);
     tr.appendChild(cell(row.mls || '—', 'num'));
 
     /* Status */
@@ -680,6 +833,16 @@ function renderReview(report) {
       const opt = document.createElement('option');
       opt.value = code;
       opt.textContent = code;
+      sel.appendChild(opt);
+    }
+    /* An export can carry a code this app does not know. It is shown as the
+     * file wrote it — a select that cannot hold the value would show "— set —"
+     * and make a row that WAS read look like one that was not. */
+    if (row.status && !STATUS_TOKENS.includes(row.status)) {
+      const opt = document.createElement('option');
+      opt.value = row.status;
+      opt.textContent = bucketForStatus(row.status, statusMapping) === 'unclassified'
+        ? `${row.status} (unknown)` : row.status;
       sel.appendChild(opt);
     }
     sel.value = row.status || '';
@@ -744,9 +907,12 @@ function renderReview(report) {
     const conf = document.createElement('td');
     conf.className = 'num dim';
     if (row.edited) conf.textContent = 'edited';
+    else if (row.status && row.statusScore == null) conf.textContent = 'text';
     else if (row.status) conf.textContent = row.statusScore.toFixed(2);
     else conf.textContent = '—';
-    if (!row.edited && row.status && row.statusScore < 0.65) conf.style.color = 'var(--warning)';
+    if (!row.edited && row.status && row.statusScore != null && row.statusScore < 0.65) {
+      conf.style.color = 'var(--warning)';
+    }
     tr.appendChild(conf);
 
     reviewBody.appendChild(tr);
@@ -1117,6 +1283,8 @@ function setProgress(pct, msg) {
 
 window.UAD = {
   handleImageFile,
+  handleFile,
+  handleTableText,
   runAnalysis,
   reset: resetState,
   getRows: () => rows,

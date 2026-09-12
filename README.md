@@ -27,6 +27,43 @@ browser flags either way.
 2. `Ctrl+V` into the page (or click to upload).
 3. Click each value straight into the form. Check the review table underneath.
 
+### Or drop in an export
+
+A **.csv** or **.tsv** export of the same search works too — drop it on the
+page, pick it with the file chooser, or copy the cells out of a spreadsheet and
+`Ctrl+V`. An export is *parsed*, not recognized, so there is nothing to misread;
+the rules that protect the numbers are the same.
+
+Columns are found by their header text, in whichever MLS's words the export
+uses:
+
+| Role | Headings accepted |
+|---|---|
+| Status | `Stat`, `Status` |
+| List price | `List Price`, `Current Price`, `Current List Price` |
+| Original list price | `Orig List Pr`, `Orig List Price`, `Original List Price` |
+| Sold price | `Sold Pr`, `Sold Price`, `Close Price`, `Closed Price`, `Closed Pr` |
+| Concessions | `CONC`, `Concessions`, `Seller Concessions` |
+| Market time | `MT`, `Market Time`, `DOM`, `Days on Market` — never `CDOM` |
+| MLS number | `MLS #`, `MLS#`, `MLS Number`, `MLS No` |
+
+- A column no heading names is not read. Two columns that claim the same role
+  (`List Price` beside `Current Price`) bind **neither**, and the reading is
+  provisional until the export is fixed.
+- A cell that is not a clean number — `42O,000`, `1,23,456`, a range — is left
+  empty and named by line and column, never coerced. An unreadable concession
+  blocks copying outright, because empty would count as zero.
+- A record with the wrong number of fields has had its values shifted between
+  columns, so none of them is used: it is listed with no status, and blocks
+  copying until it is set by hand.
+- Besides MRED's codes, the single-letter `S` (sold), `A` (active) and `P`
+  (pending) that some other MLSs export are understood. Other letters are not
+  guessed at — `C` is Closed in one MLS and Contingent in another.
+- A blank DOM is known to be blank in a file, so a closed sale entered with no
+  marketing period is disclosed ("44 of 46 sales") rather than blocking the
+  form. A blank DOM on an **active** listing still blocks: that median is a form
+  field.
+
 ### The form panel
 
 The first thing on the page after a paste is the form's own section, in the
@@ -229,6 +266,8 @@ npm test             # fixtures, statistics, reference grid, edge cases
 |---|---|
 | `npm test` | Everything, in order |
 | `npm run test:stats` | Arithmetic only — no browser, ~1s |
+| `npm run test:table` | The CSV / TSV reader — no browser, ~1s |
+| `npm run test:files` | Exports dropped on the real page |
 | `npm run test:grid` | The 37-row reference grid, asserted row by row |
 | `npm run test:edge` | Eleven awkward inputs (below) |
 | `npm run build:assets` | Re-inline `assets/*.png` into `src/assets.js` |
@@ -280,6 +319,7 @@ src/
   grid.js             tokens → columns → named roles
   status.js           the Stat column: clustering and constrained decoding
   stats.js            buckets, medians, ratios, output formats (pure, testable)
+  table.js            CSV / TSV exports: split, bind by header, parse (pure, testable)
   pipeline.js         the run, and everything it refuses to do quietly
   debug.js            the recognition-detail panel
 tests/                fixtures, generators and suites

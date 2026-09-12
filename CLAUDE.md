@@ -209,6 +209,36 @@ report text. Two rules that are easy to break:
   numbered list reads as a comp that did not exist; one with no original list
   price prints `—` and says why.
 
+## Exports are parsed, not recognized
+
+`src/table.js` reads a CSV or TSV export into rows of exactly the shape
+`extractGrid()` produces, so `buildReport` and every renderer take it
+unchanged. Several things in it look like they could be looser and should not be:
+
+- **The header list is wider than `HEADER_LABELS`, on purpose.** The image
+  matcher refuses extra labels because each is a near-tie for a pixel match;
+  text has no near-ties, so `DOM` and `Close Price` are safe there. The test for
+  a new label is meaning, not shape — which is why `CDOM` stays out: it survives
+  a relisting and MT does not. Do not copy the file list into `HEADER_LABELS`.
+- **Two columns claiming a role bind neither.** Picking the first is a coin toss
+  about which number the appraiser meant.
+- **A record whose field count differs from the header is kept with no values.**
+  Its columns have shifted, so its "sold price" may be its list price. It must
+  stay a row (unresolved, blocking) — dropping it is a silent missing sale.
+- **An unparseable cell is an error, not a blank.** For CONC in particular,
+  blank means zero concessions, which is a confident wrong ratio.
+- **The market-time gate is narrowed to the active bucket for files only**
+  (`review.source === 'file'` in `buildReport`). In a file a blank DOM is known
+  to be blank; in a screenshot it may be a lost glyph. The screenshot gate is
+  unchanged, and the active bucket stays gated in both because it is a form field.
+- **`S` / `A` / `P` are `ocr: false`.** They exist for exports only; the
+  recognizer must never be able to emit a one-letter code.
+
+The real exports this was built against are live MLS data with agent names in
+them, and are not committed. `tests/table-fixtures.js` writes the reference
+grid out in both layouts instead, so exports and screenshots share one ground
+truth.
+
 ## Testing
 
 `npm test` runs everything. `npm run test:stats` is the fast loop — pure
