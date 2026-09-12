@@ -29,19 +29,39 @@ async function launch() {
  * Returns { report, rows, roles, warnings, logs }.
  */
 async function analyze(browser, pngPath, opts = {}) {
+  const b64 = fs.readFileSync(pngPath).toString('base64');
+  return analyzeWith(browser, opts, async (page) => {
+    await page.evaluate(async (data) => {
+      const res = await fetch(`data:image/png;base64,${data}`);
+      const blob = await res.blob();
+      window.UAD.handleImageFile(new File([blob], 'fixture.png', { type: 'image/png' }));
+    }, b64);
+  });
+}
+
+/**
+ * Run an export through the app, as a dropped file.
+ *
+ * Goes in through handleFile — the same door a drop or the file picker uses —
+ * so the extension check, the byte decoding and the renderers are all
+ * exercised, not just the parser.
+ */
+async function analyzeFile(browser, text, fileName, opts = {}) {
+  return analyzeWith(browser, opts, async (page) => {
+    await page.evaluate((body, name) => {
+      window.UAD.handleFile(new File([body], name, { type: '' }));
+    }, text, fileName);
+  });
+}
+
+async function analyzeWith(browser, opts, load) {
   const page = await browser.newPage();
   const logs = [];
   page.on('console', m => logs.push(m.text()));
   page.on('pageerror', e => logs.push(`PAGEERROR ${e.message}`));
 
   await page.goto(INDEX, { waitUntil: 'networkidle0' });
-
-  const b64 = fs.readFileSync(pngPath).toString('base64');
-  await page.evaluate(async (data) => {
-    const res = await fetch(`data:image/png;base64,${data}`);
-    const blob = await res.blob();
-    window.UAD.handleImageFile(new File([blob], 'fixture.png', { type: 'image/png' }));
-  }, b64);
+  await load(page);
 
   await page.waitForFunction(
     () => window.UAD.getReport() !== null ||
@@ -86,7 +106,7 @@ async function analyze(browser, pngPath, opts = {}) {
         marketTime: r.marketTime,
         statusScore: r.statusScore,
       })),
-      roles: result ? {
+      roles: result && result.roles ? {
         method: result.roles.method,
         methodBy: result.roles.methodBy,
         confidence: result.roles.confidence,
@@ -122,6 +142,20 @@ async function analyze(browser, pngPath, opts = {}) {
       textOutput: window.UAD.outputFor('text'),
       uadOutput: window.UAD.outputFor('uad'),
       rowsOutput: window.UAD.outputFor('rows'),
+      /* What the page actually drew, so a renderer that throws or writes
+       * nothing is caught rather than only the numbers behind it. */
+      dom: {
+        uadValues: Array.from(document.querySelectorAll('#uad-grid .uad-field__num'))
+          .map(e => e.textContent),
+        copyAllDisabled: document.querySelector('#uad-copy-all').disabled,
+        columnMap: document.querySelector('#column-map').textContent,
+        columnsNote: document.querySelector('#columns-note').textContent,
+        reviewRows: document.querySelectorAll('#review-body tr').length,
+        reviewStatuses: Array.from(document.querySelectorAll('#review-body select.field--status'))
+          .map(s => s.value),
+        debug: document.querySelector('#debug-perf').textContent,
+        preview: document.querySelector('#preview-file').textContent,
+      },
     };
   });
 
@@ -205,6 +239,6 @@ function checkMarketTime(check, name, got, want) {
 }
 
 module.exports = {
-  launch, analyze, truthFor, fixturePath, makeChecker, checkBucket, checkMarketTime,
+  launch, analyze, analyzeFile, truthFor, fixturePath, makeChecker, checkBucket, checkMarketTime,
   FIXTURES, INDEX, ROOT,
 };

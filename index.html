@@ -38,28 +38,31 @@
 
       <p class="doc-lede">
         <span class="doc-lede__label">What This Page Does</span>
-        Paste a connectMLS or Matrix search-results screenshot and the Search Result Metrics below are read
-        from it &mdash; the counts, the lowest, median and highest prices, and the median days on
-        market &mdash; each one ready to click into the form. The screenshot never leaves this
-        machine.
+        Paste a connectMLS or Matrix search-results screenshot, or drop in the search's CSV or TSV
+        export, and the Search Result Metrics below are read from it &mdash; the counts, the lowest,
+        median and highest prices, and the median days on market &mdash; each one ready to click
+        into the form. Nothing you give it leaves this machine.
       </p>
     </header>
 
     <!-- Input -->
     <section class="card" id="input-card">
-      <div class="card__title">Grid Screenshot</div>
+      <div class="card__title">Grid Screenshot or Export</div>
 
       <div class="drop-zone" id="drop-zone">
-        <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp" />
+        <input type="file" id="file-input"
+               accept="image/png, image/jpeg, image/webp, .csv, .tsv, .txt, text/csv, text/tab-separated-values" />
         <div class="drop-zone__text">
-          <strong>Ctrl + V</strong> to paste your search results, or click to upload<br />
+          <strong>Ctrl + V</strong> to paste a screenshot of your search results, or click to upload
+          one &mdash; or a <strong>.csv</strong> / <strong>.tsv</strong> export<br />
           <small>Crop from the header row down. connectMLS: Stat, MT, List Price, Orig List Pr, Sold Pr, CONC &middot; Matrix: St, DOM, List Price, Orig Price, Sold Price</small>
         </div>
       </div>
 
       <div class="preview-wrapper hidden" id="preview-wrapper">
         <img id="preview-img" alt="Pasted MLS grid preview" />
-        <button class="preview-clear" id="clear-btn" title="Clear image" aria-label="Clear image">✕</button>
+        <div class="preview-file hidden" id="preview-file"></div>
+        <button class="preview-clear" id="clear-btn" title="Clear" aria-label="Clear">✕</button>
       </div>
 
       <div class="action-row">
@@ -143,8 +146,9 @@ Copy to Clipboard
           Codes found in this screenshot are highlighted. For connectMLS, <code>ACTV</code>,
           <code>PCHG</code>, <code>FIN</code>, <code>PEND</code> and <code>CLSD</code> are mapped as
           you specified; for Matrix, <code>A</code>, <code>P</code> and <code>S</code> are Active,
-          Pending and Sold, and <code>C</code> counts nowhere until you choose, because Matrix boards
-          use it differently. The rest use standard appraisal practice and can be changed here.
+          Pending and Sold; <code>C</code>, <code>W</code>, <code>X</code> and <code>T</code> count
+          nowhere until you choose, because boards use them differently. The rest use standard
+          appraisal practice and can be changed here.
           Every card and table below updates immediately.
         </p>
         <div class="mapping-grid" id="mapping-grid"></div>
@@ -158,7 +162,7 @@ Copy to Clipboard
     <section class="card card--wide hidden" id="review-card">
       <div class="card__title">Listings Read <span id="review-count"></span></div>
       <p class="section-note">
-        Every row the screenshot contained. Correct anything that was misread — the summary
+        Every row the screenshot or export contained. Correct anything that was misread — the summary
         recalculates as you type. Untick a row to leave it out entirely.
         <strong>Sale&nbsp;/&nbsp;list</strong> is
         <code>(sold price − concessions) ÷ original list price</code>, shown for closed sales.
@@ -203,8 +207,8 @@ Copy to Clipboard
 
     <footer class="app-footer">
       <p>
-        Deterministic template matching, entirely in your browser — the screenshot never leaves
-        this machine.
+        Deterministic template matching, entirely in your browser — the screenshot or export
+        never leaves this machine.
       </p>
       <p class="app-footer__links">
         Recognition core shared with
@@ -230,6 +234,7 @@ Copy to Clipboard
   <script src="src/compact.js"></script>
   <script src="src/status.js"></script>
   <script src="src/stats.js"></script>
+  <script src="src/table.js"></script>
   <script src="src/pipeline.js"></script>
   <script src="src/debug.js"></script>
   <script src="app.js"></script>

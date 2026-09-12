@@ -144,9 +144,10 @@ failure on the Matrix grid before it existed. `npm run test:matrix` covers them.
   vocabularies never compete. The one-letter set is allowed ONLY under a
   header-named status column: a column of single glyphs is also `BR`, and at
   13px `S` correlates with `5`. No header, no Matrix status — same rule as MT.
-  `C` is recognized but defaults to `unclassified`, because Matrix boards use it
-  for different things; W/X/T are in the set as an open-set guard, so an
-  unlisted letter is not named after the nearest of S/A/P.
+  Only S/A/P are bucketed. C, W, X and T are in the set as an open-set guard —
+  so an unlisted letter is not named after the nearest of S/A/P — and default to
+  `unclassified`, which blocks the copy: C differs between boards, and a glyph
+  misread as W must not silently remove a listing.
 - **Stroke weight is detected**, for the header (`pickFont` over
   `CFG.SYNTH_WEIGHTS`) and separately for the status column (`pickWeight`).
   connectMLS is bold, Matrix is regular; a bold template on a regular `St`
@@ -268,6 +269,40 @@ report text. Two rules that are easy to break:
 - **Every closed sale gets a line, ratio or not.** A comp missing from a
   numbered list reads as a comp that did not exist; one with no original list
   price prints `—` and says why.
+
+## Exports are parsed, not recognized
+
+`src/table.js` reads a CSV or TSV export into rows of exactly the shape
+`extractGrid()` produces, so `buildReport` and every renderer take it
+unchanged. Several things in it look like they could be looser and should not be:
+
+- **The header list is wider than `HEADER_LABELS`, on purpose.** The image
+  matcher refuses extra labels because each is a near-tie for a pixel match;
+  text has no near-ties, so `DOM` and `Close Price` are safe there. The test for
+  a new label is meaning, not shape — which is why `CDOM` stays out: it survives
+  a relisting and MT does not. Do not copy the file list into `HEADER_LABELS`.
+- **Two columns claiming a role bind neither.** Picking the first is a coin toss
+  about which number the appraiser meant.
+- **A record whose field count differs from the header is kept with no values.**
+  Its columns have shifted, so its "sold price" may be its list price. It must
+  stay a row (unresolved, blocking) — dropping it is a silent missing sale.
+- **An unparseable cell is an error, not a blank.** For CONC in particular,
+  blank means zero concessions, which is a confident wrong ratio.
+- **The market-time gate is narrowed to the active bucket for files only**
+  (`review.source === 'file'` in `buildReport`). In a file a blank DOM is known
+  to be blank; in a screenshot it may be a lost glyph. The screenshot gate is
+  unchanged, and the active bucket stays gated in both because it is a form field.
+- **`S` / `A` / `P` are shared with the Matrix recognizer**, and the reason
+  that used to keep them `ocr: false` still holds: the recognizer can never emit
+  a one-letter code for a MRED cell. `statusVocabularyFor` offers the one-letter
+  set only to a header-named column of single glyphs, and MRED codes only to
+  everything else, so neither is ever a near-tie for the other. In an export,
+  C/W/X/T are unclassified exactly as an unknown letter always was.
+
+The real exports this was built against are live MLS data with agent names in
+them, and are not committed. `tests/table-fixtures.js` writes the reference
+grid out in both layouts instead, so exports and screenshots share one ground
+truth.
 
 ## Testing
 

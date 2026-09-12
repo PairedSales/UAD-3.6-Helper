@@ -283,6 +283,20 @@ body {
   object-position: top left;
 }
 
+/* An export has no picture to show, so it gets a line saying what was read. */
+.preview-file {
+  padding: 0.35rem 2rem 0.35rem 0.4rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.preview-file strong {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
 .preview-clear {
   position: absolute;
   top: 0.45rem;

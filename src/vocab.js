@@ -16,7 +16,8 @@
 /*                       refused cell is split: the letters read glyph by   */
 /*                       glyph, the suffix only proving it is digits.       */
 /*   STATUS_CODES      — everything the mapping editor knows and the user    */
-/*                       may assign by hand.                                */
+/*                       may assign by hand, and every code a CSV or TSV    */
+/*                       export may carry as text.                          */
 /* ===================================================================== */
 
 /* Buckets the app reports on.
@@ -132,38 +133,53 @@ const STATUS_CODES = [
   { code: 'DRF', name: 'Draft', bucket: 'excluded', given: false, ocr: false,
     note: 'Draft listing — not a market state at all.' },
 
-  /* --- CoreLogic Matrix: one-letter status codes ---
-   * Matrix prints the status as a single coloured letter. A one-glyph cell can
-   * only ever be one of these, and a two-or-more-glyph cell only ever one of
-   * the MRED codes above — see statusVocabularyFor() — so neither vocabulary
-   * adds a near-tie to the other.
+  /* --- One-letter status codes: CoreLogic Matrix, and other MLSs' exports ---
    *
-   * S, A and P are the letters on the screenshot this profile was built from.
-   * The rest are here as an OPEN-SET GUARD, not because they were seen: at 13px
-   * a letter nobody told the matcher about is still some distance from S, A or
-   * P, and against a list of three it would be named after the nearest one — a
-   * withdrawn listing counted as active. Knowing W, X, T and C by shape lets
-   * each be read and set aside instead. What C MEANS differs between Matrix
-   * boards (contingent in some, cancelled in others), so it is read but put in
-   * no bucket until the appraiser says which. */
-  { code: 'A', name: 'Active', bucket: 'active', given: false, ocr: true, mls: 'matrix',
-    note: 'Matrix: on the market.' },
-  { code: 'P', name: 'Pending', bucket: 'pending', given: false, ocr: true, mls: 'matrix',
-    note: 'Matrix: under contract, not yet closed.' },
+   * Two ways in, one vocabulary.
+   *
+   * As the TEXT of a CSV or TSV export the letter is exact. Read off a Matrix
+   * SCREENSHOT it is a single coloured glyph, and a one-glyph cell can only ever
+   * be one of these while a two-or-more-glyph cell can only ever be one of the
+   * MRED codes above — see statusVocabularyFor() — so neither set is ever a
+   * near-tie for the other. The one-letter set is also allowed only under a
+   * header-named status column.
+   *
+   * Only S, A and P are put in a bucket. Their meaning is the same everywhere
+   * they appear, and an export proves it: every S row carries a close date and
+   * a close price, every P row a pending date, and no A row either.
+   *
+   * C, W, X and T are here for the RECOGNIZER, as an open-set guard, and are
+   * bucketed nowhere. At 13px a letter nobody told the matcher about is still
+   * some distance from S, A or P, and against a list of three it would be named
+   * after the nearest one — a withdrawn listing counted as active. Known by
+   * shape, each is read and then left unclassified, which blocks the copy until
+   * the appraiser says what it means on their board: C is Closed in one MLS and
+   * Contingent in another, and even W, X and T are a guess the app will not
+   * make silently — a glyph misread as W must not quietly remove a listing.
+   * In an export, where any unknown letter is unclassified anyway, they change
+   * nothing. */
   { code: 'S', name: 'Sold', bucket: 'closed', given: false, ocr: true, mls: 'matrix',
-    note: 'Matrix: closed sale. Summarized on Sold Price — never on a list price.' },
-  { code: 'C', name: 'Contingent or Cancelled', bucket: 'unclassified', given: false, ocr: true,
+    note: 'One-letter code (Matrix, e.g. CRAAR). Summarized on the sold / close price.' },
+  { code: 'A', name: 'Active', bucket: 'active', given: false, ocr: true, mls: 'matrix',
+    note: 'One-letter code (Matrix, e.g. CRAAR). On market, no accepted contract.' },
+  { code: 'P', name: 'Pending', bucket: 'pending', given: false, ocr: true, mls: 'matrix',
+    note: 'One-letter code (Matrix, e.g. CRAAR). Under contract.' },
+  { code: 'C', name: 'Contingent or Closed/Cancelled', bucket: 'unclassified', given: false, ocr: true,
     mls: 'matrix',
-    flag: 'Matrix boards use C for different things — contingent (a contract exists) in some, ' +
-          'cancelled in others. Set it to Pending or Excluded to match yours.',
-    note: 'Matrix: meaning varies by board, so it is counted nowhere until you choose.' },
-  { code: 'W', name: 'Withdrawn', bucket: 'excluded', given: false, ocr: true, mls: 'matrix',
-    note: 'Matrix: taken off the market. Neither supply nor a sale.' },
-  { code: 'X', name: 'Expired', bucket: 'excluded', given: false, ocr: true, mls: 'matrix',
-    note: 'Matrix: listing agreement ended unsold.' },
-  { code: 'T', name: 'Temporarily Off Market', bucket: 'excluded', given: false, ocr: true,
+    flag: 'C means different things on different boards — contingent in some, closed or ' +
+          'cancelled in others. Set it to match yours.',
+    note: 'One-letter code whose meaning varies by board: counted nowhere until you choose.' },
+  { code: 'W', name: 'Withdrawn (usually)', bucket: 'unclassified', given: false, ocr: true,
     mls: 'matrix',
-    note: 'Matrix: not currently showable (some boards: terminated). Not counted.' },
+    note: 'One-letter code, withdrawn on most Matrix boards. Counted nowhere until you choose — ' +
+          'usually Excluded.' },
+  { code: 'X', name: 'Expired (usually)', bucket: 'unclassified', given: false, ocr: true,
+    mls: 'matrix',
+    note: 'One-letter code, expired on most Matrix boards. Counted nowhere until you choose — ' +
+          'usually Excluded.' },
+  { code: 'T', name: 'Temporarily off / Terminated', bucket: 'unclassified', given: false, ocr: true,
+    mls: 'matrix',
+    note: 'One-letter code, temporarily off market or terminated. Counted nowhere until you choose.' },
 ];
 
 const STATUS_BY_CODE = {};
