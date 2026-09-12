@@ -10,8 +10,10 @@ const path = require('path');
 const SUITES = [
   ['Fixtures',   'make-grid-fixture.js', ['--all']],
   ['Statistics', 'test-stats.js',        []],
+  ['Exports',    'test-table.js',        []],
   ['Reference',  'test-grid.js',         []],
   ['Edge cases', 'test-edge-cases.js',   []],
+  ['Exports in the page', 'test-files.js', []],
 ];
 
 const results = [];

@@ -251,9 +251,20 @@ function buildReport(rows, mapping, review) {
    * and a visible gap is exactly what this app prefers to a filled-in guess.
    * The wording says "no market time" rather than "unreadable" because a cell
    * connectMLS left blank and a cell the recognizer refused both land here,
-   * and only one of them is a misread. */
+   * and only one of them is a misread.
+   *
+   * A CSV or TSV export narrows it to the active bucket. There, a blank cell
+   * is known to BE blank — a sale entered after the fact with no marketing
+   * period carries no DOM — so the closed and pending medians are disclosed
+   * ("44 of 46 rows") rather than gated: nothing is misread, no form field
+   * takes them, and gating on them would block a correct reading with nothing
+   * the appraiser could type to clear it. The active median is still gated,
+   * because it IS a form field, and a bare number has nowhere to carry
+   * "12 of 13". A cell the file carried but could not be parsed is an error,
+   * and gates through `errors` instead. */
   if (r.hasMarketTime) {
-    for (const id of REPORTED_BUCKETS) {
+    const gated = r.source === 'file' ? ['active'] : REPORTED_BUCKETS;
+    for (const id of gated) {
       const s = summary[id];
       if (!s.count) continue;
       const missing = s.marketTime ? s.marketTime.missing : s.count;
@@ -455,7 +466,8 @@ function uadFields(report) {
       : a.marketTime.missing
         ? `Rests on ${a.marketTime.count} of ${a.count} active listings.`
         : `Median MT of all ${a.count} active listings.` +
-          (c.marketTime ? ` Closed sales: ${formatDays(c.marketTime.median)} days.` : '');
+          (c.marketTime ? ` Closed sales: ${formatDays(c.marketTime.median)} days` +
+            (c.marketTime.missing ? ` (${c.marketTime.count} of ${c.count} sales)` : '') + '.' : '');
 
   return [
     f('active', 'Active Listings', whole(a.count),

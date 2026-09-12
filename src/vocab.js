@@ -16,7 +16,8 @@
 /*                       refused cell is split: the letters read glyph by   */
 /*                       glyph, the suffix only proving it is digits.       */
 /*   STATUS_CODES      — everything the mapping editor knows and the user    */
-/*                       may assign by hand.                                */
+/*                       may assign by hand, and every code a CSV or TSV    */
+/*                       export may carry as text.                          */
 /* ===================================================================== */
 
 /* Buckets the app reports on.
@@ -131,6 +132,21 @@ const STATUS_CODES = [
     note: 'System hold for a missing primary photo; visible only to the listing office.' },
   { code: 'DRF', name: 'Draft', bucket: 'excluded', given: false, ocr: false,
     note: 'Draft listing — not a market state at all.' },
+
+  /* --- Single-letter codes from other MLSs' exports ---
+   * Not MRED, and never read off a screenshot (ocr: false): they arrive only as
+   * the text of a CSV or TSV export, where they are exact. Only the three whose
+   * meaning the export itself proves are here — every S row carries a close
+   * date and a close price, every P row a pending date, and no A row either.
+   * The letters that stop being unambiguous past that point are left out on
+   * purpose: C is Closed in some MLSs and Contingent in others, and a guess
+   * between those moves a row between the sold and pending medians. */
+  { code: 'S', name: 'Sold', bucket: 'closed', given: false, ocr: false,
+    note: 'Single-letter export code (e.g. CRAAR). Summarized on the close price.' },
+  { code: 'A', name: 'Active', bucket: 'active', given: false, ocr: false,
+    note: 'Single-letter export code (e.g. CRAAR). On market, no accepted contract.' },
+  { code: 'P', name: 'Pending', bucket: 'pending', given: false, ocr: false,
+    note: 'Single-letter export code (e.g. CRAAR). Under contract.' },
 ];
 
 const STATUS_BY_CODE = {};

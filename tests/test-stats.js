@@ -24,7 +24,7 @@ const S = context;
  * browser and a rendered fixture. */
 vm.runInContext(
   fs.readFileSync(path.join(SRC, 'price.js'), 'utf8')
-    .match(/function analyseNumericMarks[\s\S]*?\n}\n/)[0],
+    .match(/function analyseNumericMarks[\s\S]*?\r?\n}\r?\n/)[0],
   context, { filename: 'price.js#analyseNumericMarks' });
 
 const failures = [];

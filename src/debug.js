@@ -125,6 +125,32 @@ function renderDebugClusters(el, result) {
   }
 }
 
+/**
+ * The same panel for an export, which has no pixels to overlay: how the file
+ * was split, which heading every role came from, and each cell it refused.
+ */
+function renderDebugTable(el, result, perf) {
+  if (!el) return;
+  const lines = [];
+  lines.push(`${result.fileName}: ${result.delimiter}-separated` +
+             (result.encoding ? `, ${result.encoding}` : '') +
+             `, header on line ${result.headerLine} with ${result.headerLabels.length} columns`);
+  lines.push(`${result.recordCount} records after the header  → ${result.rows.length} rows  ` +
+             `(${result.skipped.malformed} malformed, ${result.skipped.notAListing} empty, ` +
+             `${result.skipped.aboveHeader} above the header)`);
+  for (const [role, c] of Object.entries(result.columns)) {
+    lines.push(`  ${role.padEnd(7)} ← column ${String(c.index + 1).padStart(2)} "${c.label}"`);
+  }
+  for (const a of result.ambiguous) {
+    lines.push(`  ${a.role.padEnd(7)} ✕ claimed by ${a.labels.map(l => `"${l}"`).join(', ')} — not used`);
+  }
+  for (const r of result.refused) {
+    lines.push(`  refused  line ${r.line}, ${r.label}: "${r.raw}" ${r.why}`);
+  }
+  if (perf) lines.push(Object.entries(perf).map(([k, v]) => `${k} ${v.toFixed(0)}ms`).join('   '));
+  el.textContent = lines.join('\n');
+}
+
 /** Timings and the headline structural facts. */
 function renderDebugPerf(el, result, perf) {
   if (!el) return;

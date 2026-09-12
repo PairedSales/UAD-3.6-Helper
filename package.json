@@ -10,6 +10,8 @@
     "test": "node tests/run-all.js",
     "test:grid": "node tests/test-grid.js",
     "test:stats": "node tests/test-stats.js",
+    "test:table": "node tests/test-table.js",
+    "test:files": "node tests/test-files.js",
     "test:edge": "node tests/test-edge-cases.js",
     "build:assets": "node tests/build-assets.js"
   },
