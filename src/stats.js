@@ -465,7 +465,7 @@ function uadFields(report) {
       ? 'No market time was read for the active listings.'
       : a.marketTime.missing
         ? `Rests on ${a.marketTime.count} of ${a.count} active listings.`
-        : `Median MT of all ${a.count} active listings.` +
+        : `Median market time (MT / DOM) of all ${a.count} active listings.` +
           (c.marketTime ? ` Closed sales: ${formatDays(c.marketTime.median)} days` +
             (c.marketTime.missing ? ` (${c.marketTime.count} of ${c.count} sales)` : '') + '.' : '');
 
@@ -522,7 +522,7 @@ function uadFieldsAsText(report) {
 
   lines.push('');
   lines.push('Prices are bare numbers — the form supplies the $ and the commas. ' +
-             'Days on market is the median MT of the active listings.');
+             'Days on market is the median market time (MT / DOM) of the active listings.');
   return lines.join('\n');
 }
 

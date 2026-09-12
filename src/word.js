@@ -166,7 +166,21 @@ function matchWord(raster, candidates, font, weight) {
  * guess, we score every candidate family against the cells we actually have
  * and keep the winner for the rest of the run.
  */
-function pickFont(rasters, candidates, weight) {
+function pickWeight(rasters, candidates, font, weights) {
+  const tryWeights = Array.isArray(weights) ? weights : [weights || CFG.SYNTH_WEIGHT];
+  let best = null;
+  for (const weight of tryWeights) {
+    let total = 0;
+    for (const raster of rasters) {
+      const m = matchWord(raster, candidates, font, weight);
+      if (m) total += m.score;
+    }
+    if (!best || total > best.total) best = { weight, total };
+  }
+  return best ? best.weight : tryWeights[0];
+}
+
+function pickFont(rasters, candidates, weights) {
   /* A handful of cells is plenty to tell five families apart, and this runs
    * once per candidate column: scoring every raster against every candidate in
    * five fonts was the single most expensive thing the app did. */
@@ -175,17 +189,26 @@ function pickFont(rasters, candidates, weight) {
   for (let i = 0; i < rasters.length && sample.length < CFG.FONT_SAMPLE_RASTERS; i += step) {
     sample.push(rasters[i]);
   }
-  if (!sample.length) return { font: CFG.SYNTH_FONTS[0], mean: 0 };
+  /* The weight is a property of the screenshot just as the family is.
+   * connectMLS draws its header and status codes bold; Matrix draws both at
+   * regular weight, and a bold template stretched over a regular stroke loses
+   * enough correlation to hand a two-letter header to the wrong label. So a
+   * caller that does not know the weight passes several and gets the winner. */
+  const tryWeights = Array.isArray(weights) ? weights : [weights || CFG.SYNTH_WEIGHT];
+  const fallback = { font: CFG.SYNTH_FONTS[0], weight: tryWeights[0], mean: 0 };
+  if (!sample.length) return fallback;
 
   let best = null;
-  for (const font of CFG.SYNTH_FONTS) {
-    let total = 0;
-    for (const raster of sample) {
-      const m = matchWord(raster, candidates, font, weight);
-      if (m) total += m.score;
+  for (const weight of tryWeights) {
+    for (const font of CFG.SYNTH_FONTS) {
+      let total = 0;
+      for (const raster of sample) {
+        const m = matchWord(raster, candidates, font, weight);
+        if (m) total += m.score;
+      }
+      const mean = total / sample.length;
+      if (!best || mean > best.mean) best = { font, weight, mean };
     }
-    const mean = total / sample.length;
-    if (!best || mean > best.mean) best = { font, mean };
   }
-  return best || { font: CFG.SYNTH_FONTS[0], mean: 0 };
+  return best || fallback;
 }

@@ -25,11 +25,18 @@ Concretely, do not undo any of these without a very good reason:
   nowhere to carry a caveat. The provisional banner is written into the copied
   text too — the narrative block AND the form-field block — so select-and-copy
   cannot escape it.
-- Market time is bound by the header label `MT` and by nothing else. It is a
-  column of one- to three-digit integers, indistinguishable in the data from
-  `# Rms`, `Yr Blt`, `All Beds`, `ASF` and `# Garage`; `CFG.MT_MAX_DAYS` is not
-  a second guard and must not be described as one, since every year in a
-  `Yr Blt` column clears it. No `MT` header, no days on market.
+- Market time is bound by its header label — `MT` in connectMLS, `DOM` in
+  Matrix — and by nothing else, and only by a label that matched at
+  `CFG.HEADER_MIN_ANCHOR_SCORE`. It is a column of one- to three-digit
+  integers, indistinguishable in the data from `# Rms`, `Yr Blt`, `All Beds`,
+  `ASF` and `# Garage`; `CFG.MT_MAX_DAYS` is not a second guard and must not be
+  described as one, since every year in a `Yr Blt` column clears it. No
+  `MT`/`DOM` header, no days on market.
+- Active and pending listings are priced on the CURRENT list price only. A
+  layout with `Orig Price` and no `List Price` (common in Matrix) leaves them
+  unpriced and says so by name. A column the header labelled is never
+  re-bound to another role by position — that is how Orig Price once became
+  the list price.
 - The two boxes the app cannot source — the lookback period and the distress
   question — are not on the panel. The lookback period is a parameter of the
   search rather than a column of the grid, and whether the market is distressed
@@ -126,12 +133,66 @@ The strict margin is spent where it buys something: `kickoutRivals` names only
 the substitutions that would spell a DIFFERENT kick-out code, because those are
 the only misreads that move a bucket and still get accepted.
 
+## Two MLSs: connectMLS (MRED) and CoreLogic Matrix
+
+The same pipeline reads both; nothing is switched by a setting. What differs
+is decided from the screenshot, and every one of these decisions was a real
+failure on the Matrix grid before it existed. `npm run test:matrix` covers them.
+
+- **Status vocabulary, per column, by glyph count** (`statusVocabularyFor`).
+  Every MRED code is 2–5 glyphs, every Matrix code is one letter, so the two
+  vocabularies never compete. The one-letter set is allowed ONLY under a
+  header-named status column: a column of single glyphs is also `BR`, and at
+  13px `S` correlates with `5`. No header, no Matrix status — same rule as MT.
+  Only S/A/P are bucketed. C, W, X and T are in the set as an open-set guard —
+  so an unlisted letter is not named after the nearest of S/A/P — and default to
+  `unclassified`, which blocks the copy: C differs between boards, and a glyph
+  misread as W must not silently remove a listing.
+- **Stroke weight is detected**, for the header (`pickFont` over
+  `CFG.SYNTH_WEIGHTS`) and separately for the status column (`pickWeight`).
+  connectMLS is bold, Matrix is regular; a bold template on a regular `St`
+  handed the status label to `Yr Blt`.
+- **Which digit bank reads first is decided per screenshot**
+  (`chooseDigitBank`), by how often the reference bank and the font-adapted
+  bank name DIFFERENT digits for the same glyph — not by mean score, which the
+  easy digits dilute. The reference bank on Verdana read `619` as `629` at 0.63
+  with a 0.03 margin, over every bar; the adapted bank was only ever consulted
+  on cells the reference had refused. connectMLS pixels disagree on 0 of 80
+  glyphs, Matrix on ~18, so the bar is not delicate.
+- **A header label counts as an anchor only at `HEADER_MIN_ANCHOR_SCORE`.**
+  With short labels (`St`, `BR`, `DOM`) in the list, a data row matched as a
+  header at ~0.5 and bound a "DOM" column. Real labels score 0.77+.
+- **One column per acted-on role** in `bindHeaderRoles` / `readHeaderBand`: the
+  best match wins, a weaker duplicate binds nothing.
+- **A sort icon is trimmed, not templated** (`matchHeaderToken`): Matrix's bold
+  arrow is no font glyph, so the cell is also matched without its last narrow
+  glyph, and that reading must beat the whole cell by `HEADER_TRIM_MIN_GAIN`.
+- **Link underlines are erased** (`stripUnderlines`) — a hairline at least
+  `UNDERLINE_MIN_GLYPHS` glyph widths long. Not 3: the tops of three bold 11px
+  connectMLS glyphs join into an 18px hairline, and erasing it shifted glyphW.
+- **A sliver beside a row is part of that row** (`classifyBands`). Verdana's
+  comma tail detaches on shaded rows and was counted as an unreadable row band.
+  Both bars are fractions of the median row height, not pixels — the pixel
+  version absorbed the 1× slivers and dropped every row of the 2× paste. A
+  sliver touching the image edge still counts: it may be a cut-off row.
+- **Row-number candidates must be text height** (`columnsWorthReading`), or the
+  drag handle / checkbox / photo icons at Matrix's left edge are kept instead.
+- **MLS # length**: 8 digits by shape (MRED); any 6–10 only under an `MLS #` /
+  `ML #` header.
+
+Tell the user to crop from the header row down and above Matrix's floating
+Actions toolbar: page chrome above the header is counted as dropped bands
+(provisional), and the rows faded behind the toolbar are not readable.
+
 ## Confidence is per role
 
 `roles.methodBy` records how each of list / orig / sold / conc was decided
 (`header`, `fill-pattern`, `position`). The reported confidence is the WEAKEST
 of the roles that feed a number, not the best method used for any role — a
 header that matched only "CONC" must not report 95% over two positional guesses.
+An ABSENT role is not a guess and does not lower it: the rows it would price
+come out unpriced, which gates the copy on its own, and the pipeline names the
+missing column.
 Keep it that way, and keep the column map showing provenance per row.
 
 ## Locate cheaply, read narrowly
@@ -231,8 +292,12 @@ unchanged. Several things in it look like they could be looser and should not be
   (`review.source === 'file'` in `buildReport`). In a file a blank DOM is known
   to be blank; in a screenshot it may be a lost glyph. The screenshot gate is
   unchanged, and the active bucket stays gated in both because it is a form field.
-- **`S` / `A` / `P` are `ocr: false`.** They exist for exports only; the
-  recognizer must never be able to emit a one-letter code.
+- **`S` / `A` / `P` are shared with the Matrix recognizer**, and the reason
+  that used to keep them `ocr: false` still holds: the recognizer can never emit
+  a one-letter code for a MRED cell. `statusVocabularyFor` offers the one-letter
+  set only to a header-named column of single glyphs, and MRED codes only to
+  everything else, so neither is ever a near-tie for the other. In an export,
+  C/W/X/T are unclassified exactly as an unknown letter always was.
 
 The real exports this was built against are live MLS data with agent names in
 them, and are not committed. `tests/table-fixtures.js` writes the reference
@@ -265,8 +330,10 @@ console log traces each decision (`[Grid]`, `[Header]`, `[Stat]`, `[Money]`).
   columns, which the app does not read.
 - `HS**` / `HC**` are reported as `HS` / `HC`. The hours are read only far
   enough to prove they are digits, never far enough to print — see below.
-- Without an `MT` header there is no days on market at all, and a grid whose
-  layout calls that column something else gets the same answer. Widening the
+- Without an `MT` or `DOM` header there is no days on market at all, and a grid
+  whose layout calls that column something else gets the same answer.
+- A Matrix grid pasted without its header reads nothing: no status column, and
+  no font to adapt the digits to. Widening the
   label list is one more near-tie for the whole-word matcher, which is the
   trade `vocab.js` already refuses for status codes.
 - connectMLS's `MT` on a closed row is the time that sale was marketed and on

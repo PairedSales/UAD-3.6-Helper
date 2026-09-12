@@ -22,10 +22,29 @@ Open **[pairedsales.github.io/UAD-3.6-Helper](https://pairedsales.github.io/UAD-
 or clone the repo and double-click `index.html` — no server, no build step, no
 browser flags either way.
 
-1. Screenshot your connectMLS grid — include the header row and the **Stat**,
-   **MT**, **Orig List Pr**, **List Price**, **Sold Pr** and **CONC** columns.
+1. Screenshot your grid, cropped from the header row down — include the
+   header row and the **Stat**, **MT**, **Orig List Pr**, **List Price**,
+   **Sold Pr** and **CONC** columns.
 2. `Ctrl+V` into the page (or click to upload).
 3. Click each value straight into the form. Check the review table underneath.
+
+### CoreLogic Matrix
+
+A Matrix results grid reads too — tested against a Cedar Rapids Area
+Association of Realtors display. Include the header row and the **St**,
+**DOM**, **List Price**, **Orig Price** and **Sold Price** columns, and crop
+above the floating *Actions* toolbar (the rows faded behind it are not readable).
+
+- `S`, `A` and `P` are Sold, Active and Pending. `C`, `W`, `X` and `T` are
+  recognized so they are never mistaken for those three, but they are counted
+  **nowhere until you choose** in the status mapping — `C` is contingent on one
+  board and closed or cancelled on another.
+- `DOM` is days on market, bound by its header label exactly as `MT` is.
+- **Add `List Price` to your Matrix display.** Without it the active and
+  pending listings are counted but have no price: `Orig Price` is the price a
+  listing was *first* offered at, and it is never used in place of the current one.
+- The one-letter status is only read beneath its `St` header. A column of single
+  glyphs could be `BR`, and at this size `S` looks like `5`.
 
 ### Or drop in an export
 
@@ -269,7 +288,8 @@ npm test             # fixtures, statistics, reference grid, edge cases
 | `npm run test:table` | The CSV / TSV reader — no browser, ~1s |
 | `npm run test:files` | Exports dropped on the real page |
 | `npm run test:grid` | The 37-row reference grid, asserted row by row |
-| `npm run test:edge` | Eleven awkward inputs (below) |
+| `npm run test:edge` | The awkward connectMLS inputs (below) |
+| `npm run test:matrix` | The CoreLogic Matrix fixtures, asserted row by row |
 | `npm run build:assets` | Re-inline `assets/*.png` into `src/assets.js` |
 
 ### Fixtures
@@ -298,6 +318,10 @@ expected numbers cannot drift apart.
 | `grid-kickout` | `HS48` / `HC24` / `HS120` read, and bucket as `HS` / `HC` |
 | `grid-few-closed` / `-eleven-closed` | The comp list appears at 10 and not at 11 |
 | `grid-wide-range` | Prices from $87k to $2.1M |
+| `matrix` | A Matrix grid (Verdana, one-letter status, DOM, underlined ML #) with no List Price — actives counted, never priced from Orig Price |
+| `matrix-list-price` | The same grid with List Price — a complete, copyable reading, every row asserted |
+| `matrix-hidpi` | A 2× Retina Matrix paste gives identical results |
+| `matrix-no-header` | No header: the one-letter status is refused, and no data row is taken for a header |
 
 ### Layout
 
