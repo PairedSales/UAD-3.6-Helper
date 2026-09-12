@@ -172,15 +172,14 @@ console.log('\nUAD 3.6 form fields');
     row(7, 'SS', { listPrice: 190000, marketTime: 90 }),
   ];
   const r = S.buildReport(rows, S.defaultStatusMapping(), { hasMarketTime: true });
-  const fields = S.uadFields(r, { lookbackMonths: 12 });
+  const fields = S.uadFields(r);
   const get = (label) => fields.find(f => f.label === label);
 
   eq('the fields are the form’s, in the form’s order',
     fields.map(f => f.label),
     ['Active Listings', 'Median Days on Market', 'Lowest List Price', 'Median List Price',
-     'Highest List Price', 'Lookback Period', 'Sales in Lookback Period', 'Lowest Sale Price',
-     'Median Sale Price', 'Highest Sale Price', 'Pending Sales',
-     'Distressed Market Competition']);
+     'Highest List Price', 'Sales in Lookback Period', 'Lowest Sale Price',
+     'Median Sale Price', 'Highest Sale Price', 'Pending Sales']);
 
   eq('Active Listings counts the active bucket', get('Active Listings').value, '3');
   eq('Median Days on Market is the ACTIVE listings’ median',
@@ -197,20 +196,14 @@ console.log('\nUAD 3.6 form fields');
   eq('every value on the clipboard is bare digits',
     fields.filter(f => f.value !== null).every(f => /^[0-9]+$/.test(f.value)), true);
 
-  eq('the lookback period is the user’s, not the grid’s',
-    [get('Lookback Period').value, get('Lookback Period').sourced], ['12', 'you']);
-  eq('an unset lookback period is empty, never invented',
-    S.uadFields(r, {}).find(f => f.label === 'Lookback Period').value, null);
+  eq('the lookback period is not on the panel — the grid does not carry it',
+    get('Lookback Period'), undefined);
+  eq('nor is the distress question, which is a judgement',
+    get('Distressed Market Competition'), undefined);
+  eq('every field on the panel was read off the grid',
+    fields.every(f => f.sourced === undefined), true);
 
-  eq('the distress question is observed, not answered',
-    [get('Distressed Market Competition').value, get('Distressed Market Competition').sourced],
-    [null, 'you']);
-  eq('…and the observation counts the short sales',
-    /1 short sale \(SS\)/.test(get('Distressed Market Competition').note), true);
-  eq('…and admits what a status code cannot show',
-    /REO, relocation and estate sales/.test(get('Distressed Market Competition').note), true);
-
-  const text = S.uadFieldsAsText(r, { lookbackMonths: 12 });
+  const text = S.uadFieldsAsText(r);
   eq('the text block names the section', /UAD 3.6 — Search Result Metrics/.test(text), true);
   eq('the text block quotes the same days on market', /Median Days on Market \.+ 20 days/.test(text), true);
   eq('the text block quotes the same bare price', /Lowest List Price \.+ 200000/.test(text), true);
@@ -225,7 +218,7 @@ console.log('\nthe form fields cannot escape the provisional banner');
   ];
   const r = S.buildReport(rows, S.defaultStatusMapping(), { hasMarketTime: true });
   eq('an unreadable status is still provisional', r.provisional, true);
-  const text = S.uadFieldsAsText(r, { lookbackMonths: 12 });
+  const text = S.uadFieldsAsText(r);
   eq('so the copied field block says so on its first line',
     text.split('\n')[0], '*** PROVISIONAL — do not use without checking: ***');
   eq('and lists why', /no readable status/.test(text), true);
