@@ -93,8 +93,10 @@ function expectedSummary(listings, mapping) {
   const out = {};
   for (const bucket of ['active', 'pending', 'closed', 'excluded']) {
     const rows = listings.filter(l => (map[l.stat] || 'excluded') === bucket);
+    /* No cross-source fallback, exactly as src/stats.js: a closed row with no
+     * sold price is unpriced, not priced at its asking price. */
     const prices = rows
-      .map(l => (bucket === 'closed' ? (l.sold != null ? l.sold : l.list) : l.list))
+      .map(l => (bucket === 'closed' ? l.sold : l.list))
       .filter(p => typeof p === 'number' && p > 0);
     /* (sold - concessions) / original list price, for closed sales only. */
     const ratios = bucket !== 'closed' ? [] : rows

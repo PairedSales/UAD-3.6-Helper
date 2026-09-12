@@ -183,6 +183,78 @@ function splitRunEvenly(vP, run, k) {
 }
 
 /**
+ * Choose, once per screenshot, which digit bank reads it FIRST.
+ *
+ * The reference bank is cut from real connectMLS pixels, and on a connectMLS
+ * grid nothing beats it. On a grid drawn in some other face it is not a weaker
+ * reader, it is a dangerous one: its templates are close enough to be accepted
+ * and wrong enough to be wrong. On a Matrix grid in Verdana it reads the "1" of
+ * "619" as a 2 at 0.63 with a 0.03 margin — over every bar, since 1 and 2 are
+ * not a confusable pair — and the font-adapted bank, which reads that same
+ * glyph as a 1 at 0.92, was only ever consulted on cells the reference had
+ * REFUSED. A cell it misread was never refused, so a days-on-market of 629
+ * went into a median with nothing to show for it.
+ *
+ * So the question is asked of the whole grid, where the evidence is: sample the
+ * digits of its comma-grouped cells and see which bank explains them. The
+ * adapted bank contains every reference template, so it can only score higher;
+ * on connectMLS's own pixels it scores barely higher and the reference stays
+ * primary, exactly as before. Only a clear gain — a different face — switches
+ * the grid over.
+ *
+ * Returns { bank, fallbackFont, adapted } — `fallbackFont` is the family the
+ * callers' lazy second pass should adapt to, and is null when the adapted bank
+ * is already primary.
+ */
+function chooseDigitBank(surf, cols, bank, uiFont) {
+  if (!uiFont) return { bank, fallbackFont: null, adapted: false };
+
+  const glyphs = [];
+  for (const col of cols) {
+    for (const t of col.cells.values()) {
+      /* Comma-grouped cells are numbers; the first glyph may be a '$'. */
+      if (!t.commas.length || t.tall.length < 4) continue;
+      for (const g of t.tall.slice(1)) glyphs.push(g);
+    }
+  }
+  if (glyphs.length < CFG.BANK_SAMPLE_MIN) return { bank, fallbackFont: uiFont, adapted: false };
+
+  const step = Math.max(1, Math.floor(glyphs.length / CFG.BANK_SAMPLE_GLYPHS));
+  const sample = [];
+  for (let i = 0; i < glyphs.length && sample.length < CFG.BANK_SAMPLE_GLYPHS; i += step) {
+    const g = glyphs[i];
+    const norm = normalizeGlyph(surf.gray, g.x, g.y, g.w, g.h);
+    norm.features = computeStructuralFeatures(norm.binary, CFG.NORM_W, CFG.NORM_H, norm.grayscale);
+    sample.push(norm);
+  }
+
+  /* The evidence is DISAGREEMENT, not the mean score. Most digits read the
+   * same in either bank and dilute a mean; what matters is whether any glyph
+   * is best explained by a template in the grid's own face as a DIFFERENT
+   * digit from the one the reference bank would have named. On connectMLS's
+   * own pixels no reference template is out-correlated that way; on another
+   * face every "1" can be. */
+  const adaptedBank = fontAdaptedDigitBank(bank, uiFont);
+  let disagree = 0, refSum = 0, adaptedSum = 0;
+  for (const n of sample) {
+    const a = classifyGlyph(n, bank), b = classifyGlyph(n, adaptedBank);
+    refSum += a.score; adaptedSum += b.score;
+    if (String(a.digit) !== String(b.digit)) disagree++;
+  }
+  const disagreeFrac = disagree / sample.length;
+  const switchOver = disagreeFrac >= CFG.BANK_ADAPT_MIN_DISAGREE;
+
+  console.log(`[Money] digit bank: reference ${(refSum / sample.length).toFixed(3)} vs adapted to ` +
+    `${uiFont} ${(adaptedSum / sample.length).toFixed(3)}; the two name different digits for ` +
+    `${disagree}/${sample.length} glyphs → ` +
+    (switchOver ? 'the grid is not in connectMLS pixels; adapted bank reads first' : 'reference bank'));
+
+  return switchOver
+    ? { bank: adaptedBank, fallbackFont: null, adapted: true }
+    : { bank, fallbackFont: uiFont, adapted: false };
+}
+
+/**
  * Decide, for a whole column at once, whether its cells carry a leading
  * currency symbol.
  *

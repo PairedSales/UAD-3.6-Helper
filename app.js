@@ -1,8 +1,8 @@
 /* ===== UAD 3.6 Helper — UI ============================================ */
-/* Paste a connectMLS grid, read it once, then let the appraiser correct     */
-/* anything the recognizer got wrong. Every correction recomputes the three  */
-/* summary cards immediately, so the numbers on screen always match the      */
-/* table below them.                                                         */
+/* Paste a connectMLS or Matrix grid, read it once, then let the appraiser   */
+/* correct anything the recognizer got wrong. Every correction recomputes    */
+/* the three summary cards immediately, so the numbers on screen always      */
+/* match the table below them.                                               */
 /*                                                                          */
 /* Copying is gated on the reading being complete: if rows could not be      */
 /* read, the summary is marked provisional and the copy buttons stay off     */
@@ -477,7 +477,7 @@ function marketTimeMarkup(s, id) {
   }
   const mt = s.marketTime;
   const which = id === 'active' ? 'days on market' : 'days marketed';
-  return `<div class="stat-card__subhead" title="From the MT column">Market time</div>` +
+  return `<div class="stat-card__subhead" title="From the MT / DOM column">Market time</div>` +
     `<div class="stat-card__stats stat-card__stats--tight">` +
       statLine('Low', formatDays(mt.low)) +
       statLine('High', formatDays(mt.high)) +
@@ -556,12 +556,12 @@ function renderColumns(result) {
     'feeds closed sales', 'sold');
   line('Concessions', roles.conc && roles.conc.col, roles.conc ? roles.conc.values.size : 0,
     'subtracted from the sold price in the ratio', 'conc');
-  line('Market time (MT)',
+  line('Market time (MT / DOM)',
     result.marketTimeCol && result.marketTimeCol.col,
     result.marketTimeCol ? result.marketTimeCol.read : 0,
     result.marketTimeCol
       ? 'feeds median days on market · named by the header, never inferred'
-      : 'no MT header — days on market cannot be inferred from a column of small numbers');
+      : 'no MT or DOM header — days on market cannot be inferred from a column of small numbers');
   if (result.mlsCol) line('MLS #', result.mlsCol.col, result.mlsCol.values.size, 'duplicate check');
 
   const summary = {
@@ -588,10 +588,18 @@ function renderMapping() {
     present.set(code, (present.get(code) || 0) + 1);
   }
 
-  const ordered = STATUS_CODES.slice().sort((a, b) => {
-    const pa = present.has(a.code) ? 0 : 1, pb = present.has(b.code) ? 0 : 1;
-    return pa - pb || a.code.localeCompare(b.code);
-  });
+  /* Only the vocabulary this grid was read against — MRED's codes for a
+   * connectMLS grid, the one-letter set for a Matrix one — plus anything
+   * typed by hand. Listing both would put a dozen codes in front of the
+   * appraiser that cannot occur on the screenshot they pasted. */
+  const vocabId = lastResult && lastResult.statusCol && lastResult.statusCol.vocab
+    ? lastResult.statusCol.vocab.id : 'mred';
+  const ordered = STATUS_CODES
+    .filter(s => (s.mls || 'mred') === vocabId || present.has(s.code))
+    .sort((a, b) => {
+      const pa = present.has(a.code) ? 0 : 1, pb = present.has(b.code) ? 0 : 1;
+      return pa - pb || a.code.localeCompare(b.code);
+    });
 
   for (const entry of ordered) {
     const row = document.createElement('div');
@@ -605,7 +613,9 @@ function renderMapping() {
     const sel = document.createElement('select');
     sel.className = 'field';
     for (const b of BUCKETS) {
-      if (b.id === 'unclassified') continue;
+      /* "Unknown" is offered only where it is the default — a code whose
+       * meaning differs between MLS boards, counted nowhere until chosen. */
+      if (b.id === 'unclassified' && entry.bucket !== 'unclassified') continue;
       const opt = document.createElement('option');
       opt.value = b.id;
       opt.textContent = b.short;
@@ -821,7 +831,7 @@ function daysCell(row) {
   input.value = row.marketTime === null || row.marketTime === undefined
     ? '' : String(row.marketTime);
   input.placeholder = '—';
-  const HINT = 'Market time in days, from the MT column';
+  const HINT = 'Market time in days, from the MT / DOM column';
   input.title = HINT;
   input.addEventListener('change', () => {
     const parsed = parseDaysInput(input.value);

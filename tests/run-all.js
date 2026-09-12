@@ -8,10 +8,12 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 
 const SUITES = [
-  ['Fixtures',   'make-grid-fixture.js', ['--all']],
-  ['Statistics', 'test-stats.js',        []],
-  ['Reference',  'test-grid.js',         []],
-  ['Edge cases', 'test-edge-cases.js',   []],
+  ['Fixtures',   'make-grid-fixture.js',   ['--all']],
+  ['Fixtures',   'make-matrix-fixture.js', ['--all']],
+  ['Statistics', 'test-stats.js',          []],
+  ['Reference',  'test-grid.js',           []],
+  ['Edge cases', 'test-edge-cases.js',     []],
+  ['Matrix',     'test-matrix.js',         []],
 ];
 
 const results = [];

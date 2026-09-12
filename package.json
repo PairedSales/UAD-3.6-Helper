@@ -11,6 +11,8 @@
     "test:grid": "node tests/test-grid.js",
     "test:stats": "node tests/test-stats.js",
     "test:edge": "node tests/test-edge-cases.js",
+    "test:matrix": "node tests/test-matrix.js",
+    "fixture:matrix": "node tests/make-matrix-fixture.js --all",
     "build:assets": "node tests/build-assets.js"
   },
   "keywords": [

@@ -131,13 +131,71 @@ const STATUS_CODES = [
     note: 'System hold for a missing primary photo; visible only to the listing office.' },
   { code: 'DRF', name: 'Draft', bucket: 'excluded', given: false, ocr: false,
     note: 'Draft listing — not a market state at all.' },
+
+  /* --- CoreLogic Matrix: one-letter status codes ---
+   * Matrix prints the status as a single coloured letter. A one-glyph cell can
+   * only ever be one of these, and a two-or-more-glyph cell only ever one of
+   * the MRED codes above — see statusVocabularyFor() — so neither vocabulary
+   * adds a near-tie to the other.
+   *
+   * S, A and P are the letters on the screenshot this profile was built from.
+   * The rest are here as an OPEN-SET GUARD, not because they were seen: at 13px
+   * a letter nobody told the matcher about is still some distance from S, A or
+   * P, and against a list of three it would be named after the nearest one — a
+   * withdrawn listing counted as active. Knowing W, X, T and C by shape lets
+   * each be read and set aside instead. What C MEANS differs between Matrix
+   * boards (contingent in some, cancelled in others), so it is read but put in
+   * no bucket until the appraiser says which. */
+  { code: 'A', name: 'Active', bucket: 'active', given: false, ocr: true, mls: 'matrix',
+    note: 'Matrix: on the market.' },
+  { code: 'P', name: 'Pending', bucket: 'pending', given: false, ocr: true, mls: 'matrix',
+    note: 'Matrix: under contract, not yet closed.' },
+  { code: 'S', name: 'Sold', bucket: 'closed', given: false, ocr: true, mls: 'matrix',
+    note: 'Matrix: closed sale. Summarized on Sold Price — never on a list price.' },
+  { code: 'C', name: 'Contingent or Cancelled', bucket: 'unclassified', given: false, ocr: true,
+    mls: 'matrix',
+    flag: 'Matrix boards use C for different things — contingent (a contract exists) in some, ' +
+          'cancelled in others. Set it to Pending or Excluded to match yours.',
+    note: 'Matrix: meaning varies by board, so it is counted nowhere until you choose.' },
+  { code: 'W', name: 'Withdrawn', bucket: 'excluded', given: false, ocr: true, mls: 'matrix',
+    note: 'Matrix: taken off the market. Neither supply nor a sale.' },
+  { code: 'X', name: 'Expired', bucket: 'excluded', given: false, ocr: true, mls: 'matrix',
+    note: 'Matrix: listing agreement ended unsold.' },
+  { code: 'T', name: 'Temporarily Off Market', bucket: 'excluded', given: false, ocr: true,
+    mls: 'matrix',
+    note: 'Matrix: not currently showable (some boards: terminated). Not counted.' },
 ];
 
 const STATUS_BY_CODE = {};
 for (const s of STATUS_CODES) STATUS_BY_CODE[s.code] = s;
 
-/** The closed set the whole-cell matcher is allowed to choose from. */
-const RECOGNIZED_TOKENS = STATUS_CODES.filter(s => s.ocr).map(s => s.code);
+/** The closed set the whole-cell matcher is allowed to choose from (MRED codes). */
+const RECOGNIZED_TOKENS = STATUS_CODES.filter(s => s.ocr && !s.mls).map(s => s.code);
+
+/** Matrix's one-letter codes: the closed set for a column of single glyphs. */
+const SINGLE_LETTER_TOKENS = STATUS_CODES.filter(s => s.ocr && s.mls === 'matrix').map(s => s.code);
+
+/**
+ * Which vocabulary a status column is read against, decided ONCE for the
+ * column from how many glyphs its cells hold.
+ *
+ * Every MRED code is two to five glyphs and every Matrix code is one, so glyph
+ * count separates the two vocabularies outright — no Matrix letter is ever a
+ * candidate for a CLSD cell, and no MRED code for an S cell. Mixing them would
+ * put SS beside S and PC beside P, which is exactly the kind of padding the top
+ * of this file refuses.
+ *
+ * The one-letter vocabulary is only allowed on a column the HEADER named as
+ * the status. A column of single glyphs is also what BR, # Garage and a row
+ * number are, and at 13px S correlates with 5 — so without the label there is
+ * nothing to say the column holds letters at all. Same rule as market time.
+ */
+function statusVocabularyFor(cells, headerNamed) {
+  const n = cells.length;
+  const single = cells.filter(c => c.token.tall.length === 1).length;
+  if (headerNamed && n >= 2 && single / n >= 0.9) return { id: 'matrix', tokens: SINGLE_LETTER_TOKENS };
+  return { id: 'mred', tokens: RECOGNIZED_TOKENS };
+}
 
 /**
  * Codes MRED prints with the kick-out period stuck on the end — HS48, HC24 —
@@ -157,7 +215,8 @@ const KICKOUT_CODES = STATUS_CODES.filter(s => s.kickout).map(s => s.code);
  * whole-cell matcher for free.
  */
 const STATUS_ALPHABET = Array.from(new Set(
-  STATUS_CODES.map(s => s.code).join('').split('').filter(c => /[A-Z]/.test(c)))).sort();
+  STATUS_CODES.filter(s => !s.mls).map(s => s.code).join('').split('')
+    .filter(c => /[A-Z]/.test(c)))).sort();
 
 /**
  * Everything a glyph inside a status cell may be: a letter of some code, or a
@@ -249,6 +308,34 @@ const HEADER_LABELS = [
    * header label is allowed to bind it. See readMarketTimeColumn in grid.js. */
   { text: 'MT',              role: 'mt'     },
   { text: 'Market Time',     role: 'mt'     },
+
+  /* --- CoreLogic Matrix ---
+   * 'DOM' is Matrix's own label for days on market — the same quantity MT is,
+   * bound the same way: by its label and never by the shape of its data.
+   * Matrix has no List Price in every layout; when it does, it is labelled
+   * 'List Price', which is already above. 'Orig Price' is the ORIGINAL list
+   * price and is never read as the current one. */
+  { text: 'St',              role: 'status' },
+  { text: 'ML #',            role: 'mls'    },
+  { text: 'DOM',             role: 'mt'     },
+  { text: 'Orig Price',      role: 'orig'   },
+  /* Decoys: the rest of a Matrix grid. Named so each is positively ruled out
+   * — without 'BR', a two-letter header could be matched as 'St' and put the
+   * status label over a column of bedroom counts. */
+  { text: 'Sold Date',       role: 'date'   },
+  { text: 'SubTy',           role: 'text'   },
+  { text: 'Area',            role: 'text'   },
+  { text: 'City/Town',       role: 'text'   },
+  { text: 'Address',         role: 'text'   },
+  { text: 'Style',           role: 'text'   },
+  { text: 'BR',              role: 'num'    },
+  { text: 'Baths',           role: 'num'    },
+  { text: 'AGF Sq',          role: 'num'    },
+  { text: 'Total Sqft',      role: 'num'    },
+  { text: 'Lot Size',        role: 'text'   },
+  { text: 'Garage',          role: 'text'   },
+  { text: 'Acres',           role: 'num'    },
+
   { text: '# Rms',           role: 'num'    },
   { text: 'ASF',             role: 'num'    },
   { text: 'Yr Blt',          role: 'num'    },
@@ -261,6 +348,55 @@ const HEADER_LABELS = [
 
 /** The header labels that positively identify a column we act on. */
 const ANCHOR_HEADER_ROLES = ['status', 'list', 'sold', 'mls'];
+
+/** Every role the app reads a number or a status out of. At most one column each. */
+const ACTED_HEADER_ROLES = ['status', 'list', 'orig', 'sold', 'conc', 'mls', 'mt'];
+
+/**
+ * Every string a header cell may be matched against.
+ *
+ * A sort indicator is drawn on whichever column the grid is sorted by, glued to
+ * its label. connectMLS draws a solid triangle, which a font renders closely
+ * enough to template, so the anchor labels get ▲ and ▼ variants. Matrix draws
+ * an arrow ICON that no font glyph resembles; that one is handled by matching
+ * the cell with its last glyph dropped — see matchHeaderToken in grid.js.
+ *
+ * `base` is the plain labels alone, for the one font-selection pass: it only
+ * has to tell font families apart, and the variants would multiply its cost
+ * without adding evidence.
+ */
+function headerCandidates() {
+  const base = HEADER_LABELS.map(h => h.text);
+  const all = base.slice();
+  for (const h of HEADER_LABELS) {
+    if (ANCHOR_HEADER_ROLES.includes(h.role)) all.push(h.text + '▲', h.text + '▼');
+  }
+  return { base, all };
+}
+
+/**
+ * The role a header match may claim, given how well it matched.
+ *
+ * Short labels — St, BR, MT, DOM — are also what short DATA looks like, so a
+ * weak match of one is not allowed to do anything that only a header can do:
+ * it does not count toward recognizing the row as a header, and a market-time
+ * label, which is the ONLY thing that binds days on market, does not bind.
+ */
+function headerMatchRole(role, score) {
+  if (role === 'mt' && score < CFG.HEADER_MIN_ANCHOR_SCORE) return 'text';
+  return role;
+}
+
+/** Anchor roles present among matches strong enough to count as anchors. */
+function countHeaderAnchors(matches) {
+  const strong = new Set(matches.filter(m => m.score >= CFG.HEADER_MIN_ANCHOR_SCORE).map(m => m.role));
+  return ANCHOR_HEADER_ROLES.filter(r => strong.has(r)).length;
+}
+
+/** A matched header string back to its label: strip any sort indicator. */
+function headerLabelOf(text) {
+  return String(text).replace(/[▲▼]$/, '');
+}
 
 /** Default mapping object: { code: bucketId }. */
 function defaultStatusMapping() {
@@ -281,9 +417,11 @@ function bucketForStatus(code, mapping) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     BUCKETS, REPORTED_BUCKETS, BUCKET_PRICE_SOURCE, STATUS_CODES, STATUS_BY_CODE,
-    RECOGNIZED_TOKENS, KICKOUT_CODES, STATUS_ALPHABET, STATUS_GLYPHS, kickoutRivals,
+    RECOGNIZED_TOKENS, SINGLE_LETTER_TOKENS, statusVocabularyFor,
+    KICKOUT_CODES, STATUS_ALPHABET, STATUS_GLYPHS, kickoutRivals,
     STATUS_TOKENS, CONFUSABLE_STATUS_PAIRS, HEADER_LABELS,
-    ANCHOR_HEADER_ROLES, defaultStatusMapping, bucketForStatus,
-    normalizeStatusCode,
+    ANCHOR_HEADER_ROLES, ACTED_HEADER_ROLES, headerCandidates, headerLabelOf,
+    headerMatchRole, countHeaderAnchors,
+    defaultStatusMapping, bucketForStatus, normalizeStatusCode,
   };
 }
