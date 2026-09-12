@@ -55,10 +55,6 @@ let rows = [];              /* editable working copy */
 let statusMapping = defaultStatusMapping();
 let outputFormat = 'uad';
 let lastReport = null;
-/* The lookback period of the user's search. The grid does not carry it — it is
- * a parameter of the search, not a column — so it is typed, kept separate from
- * everything that WAS read, and never inferred from the closed dates. */
-let lookbackMonths = null;
 /* Bumped on every new image. A run whose token is stale writes nothing: two
  * pastes in quick succession otherwise leave the slower image's numbers on
  * screen beside the newer image's preview, with copy enabled. */
@@ -137,7 +133,7 @@ copyBtn.addEventListener('click', async () => {
 
 uadCopyAll.addEventListener('click', async () => {
   if (uadCopyAll.disabled || !lastReport) return;
-  const ok = await copyToClipboard(uadFieldsAsText(lastReport, { lookbackMonths }));
+  const ok = await copyToClipboard(uadFieldsAsText(lastReport));
   uadCopyAll.classList.toggle('copied', ok);
   uadCopyAll.innerHTML = ok ? '<span>✅</span> Copied' : '<span>⚠️</span> Copy failed';
   announce(ok ? 'Every field copied.' : 'Copy failed.');
@@ -372,7 +368,7 @@ function gateCopy(report) {
 /*  Rendering                                                          */
 /* ================================================================== */
 
-const NOTICE_ICON = { ok: '✅', info: 'ℹ️', warn: '⚠️', error: '⛔' };
+const NOTICE_ICON = { ok: '✓', info: 'i', warn: '!', error: '✕' };
 
 function renderNotices(warnings) {
   noticeList.innerHTML = '';
@@ -399,7 +395,7 @@ function renderNotices(warnings) {
   for (const w of all) {
     const el = document.createElement('div');
     el.className = `notice notice--${w.level}`;
-    el.innerHTML = `<span class="notice__icon">${NOTICE_ICON[w.level] || 'ℹ️'}</span><span></span>`;
+    el.innerHTML = `<span class="notice__icon">${NOTICE_ICON[w.level] || 'i'}</span><span></span>`;
     el.lastElementChild.textContent = w.text;
     noticeList.appendChild(el);
   }
@@ -915,7 +911,7 @@ function renderOutput() {
   if (outputFormat === 'tsv') outputBox.value = reportAsTsv(lastReport);
   else if (outputFormat === 'rows') outputBox.value = allRowsAsTsv(lastReport);
   else if (outputFormat === 'text') outputBox.value = reportAsText(lastReport);
-  else outputBox.value = uadFieldsAsText(lastReport, { lookbackMonths });
+  else outputBox.value = uadFieldsAsText(lastReport);
 }
 
 function allRowsAsTsv(report) {
@@ -961,9 +957,21 @@ function allRowsAsTsv(report) {
  * the copied text block is built from — one source, so the panel and the
  * clipboard cannot disagree about a number.
  */
+/* Which of the form's two columns each block sits in. The form runs its left
+ * column continuously — pending sales begin directly under the last list price
+ * — so the panel is built as two columns of blocks rather than as a grid of
+ * shared rows, where the taller right column would push a gap in above
+ * pending. A group with no entry here falls to the left. */
+const UAD_COLUMN_OF = { active: 'left', pending: 'left', sales: 'right' };
+
 function renderUad(report) {
   uadGrid.innerHTML = '';
-  const fields = uadFields(report, { lookbackMonths });
+  const fields = uadFields(report);
+
+  const columns = { left: document.createElement('div'), right: document.createElement('div') };
+  columns.left.className = 'uad-column';
+  columns.right.className = 'uad-column';
+  uadGrid.append(columns.left, columns.right);
 
   /* Per-field copy is off while the reading is provisional, for the reason the
    * whole-report copy is: a bare number has nowhere to carry the caveat. The
@@ -983,8 +991,8 @@ function renderUad(report) {
     title.textContent = g.title;
     box.appendChild(title);
 
-    for (const f of mine) box.appendChild(uadFieldRow(f, blocked, g.title));
-    uadGrid.appendChild(box);
+    for (const f of mine) box.appendChild(uadFieldRow(f, blocked));
+    columns[UAD_COLUMN_OF[g.id] || 'left'].appendChild(box);
   }
 
   if (blocked) {
@@ -1000,41 +1008,20 @@ function renderUad(report) {
   uadCopyAll.disabled = blocked;
 }
 
-function uadFieldRow(field, blocked, groupTitle) {
+function uadFieldRow(field, blocked) {
   const row = document.createElement('div');
-  row.className = 'uad-field' +
-    (field.sourced === 'you' ? ' uad-field--yours' : '') +
-    (field.value === null ? ' uad-field--empty' : '');
+  row.className = 'uad-field' + (field.value === null ? ' uad-field--empty' : '');
 
   const label = document.createElement('span');
   label.className = 'uad-field__label';
-  /* The form itself repeats "Active Listings" as both the heading and the
-   * field, so the repetition is faithful and stays. The exception is a row
-   * that is only an observation — the distress question — where a second copy
-   * of the heading reads as a second thing to fill in. */
-  const isObservation = field.value === null && field.sourced === 'you' && !field.editable;
-  label.textContent = (isObservation && field.label === groupTitle) ? '' : field.label;
+  /* Every label is printed, including one that repeats its block's heading.
+   * The form works the same way — "Active Listings" IS the row with the count
+   * beside it, not a caption above one — and the stylesheet hides the block
+   * heading wherever the first field already says it. */
+  label.textContent = field.label;
   row.appendChild(label);
 
-  if (field.editable === 'lookbackMonths') {
-    /* Input and unit are wrapped together rather than laid out as two grid
-     * cells, so the row keeps the same two-column shape as every other field
-     * without a :has() selector deciding it. */
-    const pair = document.createElement('span');
-    pair.className = 'uad-field__pair';
-    pair.appendChild(lookbackInput(field));
-    if (field.unit) pair.appendChild(unitTag(field.unit));
-    row.appendChild(pair);
-  } else if (field.value === null && field.sourced === 'you') {
-    /* Distressed market competition. There is nothing to copy, because the
-     * grid cannot answer it — see distressedObservation() in stats.js. */
-    const span = document.createElement('span');
-    span.className = 'uad-field__value uad-field__value--static';
-    span.textContent = field.display;
-    row.appendChild(span);
-  } else {
-    row.appendChild(uadCopyButton(field, blocked));
-  }
+  row.appendChild(uadCopyButton(field, blocked));
 
   if (field.note) {
     const note = document.createElement('span');
@@ -1078,62 +1065,6 @@ function uadCopyButton(field, blocked) {
     setTimeout(() => btn.classList.remove('is-copied'), 1400);
   });
   return btn;
-}
-
-/**
- * The lookback period is the one number on this panel the app cannot read.
- *
- * It is a parameter of the search, not a column of the grid, so it is typed
- * rather than recognized — and it is kept visibly separate from the fields
- * that WERE read, because a number the app was told is not evidence of
- * anything the app saw.
- */
-function lookbackInput(field) {
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.inputMode = 'numeric';
-  input.className = 'field uad-field__input field--mono';
-  input.value = lookbackMonths === null ? '' : String(lookbackMonths);
-  input.placeholder = '—';
-  input.setAttribute('aria-label', 'Lookback period in months');
-  input.title = 'The lookback period of your connectMLS search, in months.';
-
-  /* This handler deliberately does NOT call recompute().
-   *
-   * recompute() rebuilds this panel from scratch, which would replace the very
-   * input the event came from. "change" fires on blur, so clicking a copy
-   * button straight after typing would destroy that button between mousedown
-   * and mouseup and the click would never land — the first copy after entering
-   * a lookback period would silently do nothing. The lookback feeds only the
-   * copied text, so refreshing that is the whole of the work. */
-  input.addEventListener('change', () => {
-    const text = input.value.trim();
-    if (text === '') {
-      input.classList.remove('is-invalid');
-      lookbackMonths = null;
-      renderOutput();
-      return;
-    }
-    const n = Number(text.replace(/\s/g, ''));
-    if (!isFinite(n) || n <= 0 || n > CFG.LOOKBACK_MAX_MONTHS || Math.round(n) !== n) {
-      input.classList.add('is-invalid');
-      showStatus(`"${text}" is not a lookback period. Enter whole months, ` +
-        `1–${CFG.LOOKBACK_MAX_MONTHS}.`, 'error');
-      return;
-    }
-    input.classList.remove('is-invalid');
-    lookbackMonths = n;
-    renderOutput();
-  });
-  return input;
-}
-
-/** The unit the form prints beside its own input, e.g. "months". */
-function unitTag(text) {
-  const el = document.createElement('span');
-  el.className = 'uad-field__unit uad-field__unit--outside';
-  el.textContent = text;
-  return el;
 }
 
 /** One live region, so a copy is announced to a screen reader once. */
@@ -1205,9 +1136,8 @@ window.UAD = {
     if (!lastReport) return '';
     if (fmt === 'tsv') return reportAsTsv(lastReport);
     if (fmt === 'rows') return allRowsAsTsv(lastReport);
-    if (fmt === 'uad') return uadFieldsAsText(lastReport, { lookbackMonths });
+    if (fmt === 'uad') return uadFieldsAsText(lastReport);
     return reportAsText(lastReport);
   },
-  getFields: () => (lastReport ? uadFields(lastReport, { lookbackMonths }) : []),
-  setLookback: (m) => { lookbackMonths = m; recompute(); },
+  getFields: () => (lastReport ? uadFields(lastReport) : []),
 };

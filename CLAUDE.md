@@ -30,10 +30,14 @@ Concretely, do not undo any of these without a very good reason:
   `# Rms`, `Yr Blt`, `All Beds`, `ASF` and `# Garage`; `CFG.MT_MAX_DAYS` is not
   a second guard and must not be described as one, since every year in a
   `Yr Blt` column clears it. No `MT` header, no days on market.
-- The two fields the app cannot source — the lookback period and the distress
-  question — stay unsourced. The lookback period is typed by the user and
-  marked as theirs; the distress question gets the SS count and the caveat that
-  REO, relocation and estate sales carry no code, never a Yes or a No.
+- The two boxes the app cannot source — the lookback period and the distress
+  question — are not on the panel. The lookback period is a parameter of the
+  search rather than a column of the grid, and whether the market is distressed
+  is a judgement; MRED gives a short sale a code and gives an REO, a relocation
+  or an estate sale none, so nothing in the pixels answers either one. Do not
+  add them back with a typed box or an inferred Yes/No: every figure on that
+  panel is one the app read, and one box that is not would teach the reader
+  that some of the others might not be either.
 - Every skipped row increments a named counter that reaches the UI, and the
   green "no rows were dropped" tick is gated on all of them being zero.
 - The row-number cross-check compares against the rows that reached the REPORT,
@@ -187,11 +191,11 @@ Each field carries a `value` and a `display`, and they are different on purpose.
 screenshot at a glance. The form draws the `$` outside the box and groups the
 digits itself.
 
-One more thing that looks like a detail and is not: the lookback input's
-`change` handler must not call `recompute()`. That rebuilds the panel the input
-lives in, and since `change` fires on blur, clicking a copy button straight
-after typing would destroy the button between mousedown and mouseup — the first
-copy after entering a lookback period would silently do nothing.
+One more thing that looks like a detail and is not: nothing on that panel is an
+input, and if anything ever becomes one its `change` handler must not call
+`recompute()`. That rebuilds the panel the input lives in, and since `change`
+fires on blur, clicking a copy button straight after typing would destroy the
+button between mousedown and mouseup — the copy would silently do nothing.
 
 ## The comp list
 

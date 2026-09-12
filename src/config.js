@@ -155,10 +155,6 @@ const CFG = {
   MT_MAX_DIGITS: 4,
   MT_MAX_DAYS: 3650,
 
-  /* The lookback period the user types. Bounded so a slipped keystroke cannot
-   * put "120000 months" on the clipboard next to figures the app did read. */
-  LOOKBACK_MAX_MONTHS: 120,
-
   /* --- Header row --- */
   HEADER_MAX_ROWS: 6,           // Rows from the top that may be the header. A grid
                                 // preceded by a toolbar or a "1–45 of 45" line puts

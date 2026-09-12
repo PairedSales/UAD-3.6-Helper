@@ -126,11 +126,9 @@ const pct = v => (v == null ? '—' : (v * 100).toFixed(3) + '%');
   check.eq('Median Sale Price is the SOLD median, bare',
     field('Median Sale Price').value, String(truth.expected.closed.median));
   check.eq('Pending Sales', field('Pending Sales').value, String(truth.expected.pending.count));
-  check.ok('the lookback period is left to the user',
-    field('Lookback Period').value === null && field('Lookback Period').sourced === 'you');
-  check.ok('the distress question is not answered',
-    field('Distressed Market Competition').value === null &&
-    field('Distressed Market Competition').sourced === 'you');
+  check.ok('the two boxes the grid cannot answer are not on the panel',
+    !res.fields.some(f => f.label === 'Lookback Period' ||
+                          f.label === 'Distressed Market Competition'));
   check.ok('no copied price carries a $ or a comma',
     res.fields.filter(f => f.value !== null).every(f => /^[0-9]+$/.test(f.value)),
     JSON.stringify(res.fields.filter(f => f.value !== null && !/^[0-9]+$/.test(f.value))));

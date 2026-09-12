@@ -6,8 +6,8 @@
   <title>UAD 3.6 Helper — Market Activity from a connectMLS Grid</title>
   <meta name="description" content="Paste a connectMLS search-results screenshot and get the UAD 3.6 Search Result Metrics — active, pending and closed counts with low, high and median prices, and the median days on market. Deterministic template matching, entirely in your browser." />
 
-  <meta name="theme-color" content="#282a36" />
-  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="color-scheme" content="light" />
 
   <!-- Emoji favicon, so no binary asset is needed -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E" />
@@ -20,11 +20,6 @@
   <meta property="og:image" content="https://pairedsales.github.io/UAD-3.6-Helper/docs/screenshot.png" />
   <meta name="twitter:card" content="summary_large_image" />
 
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-
   <!-- Styles -->
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -34,20 +29,28 @@
 
     <!-- Header -->
     <header class="app-header">
-      <div class="app-header__icon">📊</div>
-      <h1>UAD 3.6 Helper</h1>
-      <p class="app-header__subtitle">
-        Paste a connectMLS grid → the UAD 3.6 Search Result Metrics, ready to click into the form
+      <div class="doc-title">
+        <span class="doc-title__name">Uniform Residential Appraisal Report &mdash; UAD 3.6 Helper</span>
+        <span class="doc-title__meta">Search Result Metrics</span>
+      </div>
+
+      <div class="doc-band"><span>Market</span></div>
+
+      <p class="doc-lede">
+        <span class="doc-lede__label">What This Page Does</span>
+        Paste a connectMLS search-results screenshot and the Search Result Metrics below are read
+        from it &mdash; the counts, the lowest, median and highest prices, and the median days on
+        market &mdash; each one ready to click into the form. The screenshot never leaves this
+        machine.
       </p>
     </header>
 
     <!-- Input -->
     <section class="card" id="input-card">
-      <div class="card__title"><span>📷</span> Grid Screenshot</div>
+      <div class="card__title">Grid Screenshot</div>
 
       <div class="drop-zone" id="drop-zone">
         <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp" />
-        <span class="drop-zone__icon">📋</span>
         <div class="drop-zone__text">
           <strong>Ctrl + V</strong> to paste your search results, or click to upload<br />
           <small>Include the header row and the Stat, MT, List Price, Orig List Pr, Sold Pr and CONC columns</small>
@@ -61,7 +64,7 @@
 
       <div class="action-row">
         <button class="btn btn--primary" id="extract-btn" disabled>
-          <span>⚡</span> Analyze Market Activity
+  Analyze Market Activity
         </button>
       </div>
 
@@ -80,7 +83,7 @@
 
     <!-- The form fields, in the form's own order -->
     <section class="card card--wide hidden" id="uad-card">
-      <div class="card__title"><span>📋</span> UAD 3.6 — Search Result Metrics</div>
+      <div class="card__title">Search Result Metrics</div>
       <p class="section-note">
         The form's own fields, in the form's own order. <strong>Click a value to copy it</strong> —
         what lands on the clipboard is the bare number the field takes (<code>189900</code>), because
@@ -90,7 +93,7 @@
       <div class="uad-grid" id="uad-grid"></div>
       <div class="action-row">
         <button class="btn btn--copy" id="uad-copy-all" disabled>
-          <span>📋</span> Copy every field
+Copy every field
         </button>
         <span class="uad-live" id="uad-live" role="status" aria-live="polite"></span>
       </div>
@@ -98,7 +101,7 @@
 
     <!-- Summary -->
     <section class="card card--wide hidden" id="summary-card">
-      <div class="card__title"><span>📈</span> Market Summary</div>
+      <div class="card__title">Market Summary</div>
 
       <div class="notice-list" id="notice-list"></div>
 
@@ -115,7 +118,7 @@
                   placeholder="The summary will appear here…"></textarea>
         <div class="action-row">
           <button class="btn btn--copy" id="copy-btn" disabled>
-            <span>📋</span> Copy to Clipboard
+Copy to Clipboard
           </button>
           <p class="section-note hidden" id="copy-note" style="margin-top:0.6rem"></p>
         </div>
@@ -124,7 +127,7 @@
 
     <!-- Column assignment -->
     <section class="card card--wide hidden" id="columns-card">
-      <div class="card__title"><span>🧭</span> Columns Used</div>
+      <div class="card__title">Columns Used</div>
       <p class="section-note" id="columns-note"></p>
       <div class="column-map" id="column-map"></div>
     </section>
@@ -132,7 +135,7 @@
     <!-- Status mapping -->
     <section class="card card--wide hidden" id="mapping-card">
       <div class="card__title debug-toggle" id="mapping-toggle">
-        <span>🗂️</span> Status Mapping
+        Status Mapping
         <span class="debug-chevron">▸</span>
       </div>
       <div class="debug-body hidden" id="mapping-body">
@@ -151,7 +154,7 @@
 
     <!-- Per-row review -->
     <section class="card card--wide hidden" id="review-card">
-      <div class="card__title"><span>🔎</span> Listings Read <span id="review-count"></span></div>
+      <div class="card__title">Listings Read <span id="review-count"></span></div>
       <p class="section-note">
         Every row the screenshot contained. Correct anything that was misread — the summary
         recalculates as you type. Untick a row to leave it out entirely.
@@ -186,7 +189,7 @@
     <!-- Debug -->
     <section class="card card--wide hidden" id="debug-card">
       <div class="card__title debug-toggle" id="debug-toggle">
-        <span>🔬</span> Recognition Detail
+        Recognition Detail
         <span class="debug-chevron">▸</span>
       </div>
       <div class="debug-body hidden" id="debug-body">

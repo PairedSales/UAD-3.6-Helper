@@ -33,15 +33,13 @@ The first thing on the page after a paste is the form's own section, in the
 form's own order and grouping:
 
 ```
-ACTIVE LISTINGS                      SALES WITHIN LOOKBACK PERIOD
-  Active Listings          13           Lookback Period      [ 12 ] months
-  Median Days on Market   101           Sales in Lookback     21
-  Lowest List Price  $189,900           Lowest Sale Price   $180,000
-  Median List Price  $229,500           Median Sale Price   $225,000
-  Highest List Price $269,900           Highest Sale Price  $269,000
+Active Listings          13           Sales in Lookback Period    21
+Median Days on Market   101           Lowest Sale Price     $180,000
+Lowest List Price  $189,900           Median Sale Price     $225,000
+Median List Price  $229,500           Highest Sale Price    $269,000
+Highest List Price $269,900
 
-PENDING SALES                        DISTRESSED MARKET COMPETITION
-  Pending Sales             3           your call — no SS codes in this search
+Pending Sales             3
 ```
 
 **Click a value to copy it.** What reaches the clipboard is the bare number the
@@ -49,15 +47,12 @@ field takes — `189900`, not `$189,900` — because the form draws the `$` outs
 the box and groups the digits itself, and a numeric input that refuses
 `189,900` while accepting `189900` is far commoner than the reverse.
 
-Two of those fields the app will not fill in, and says so:
-
-- **Lookback Period** is a parameter of your search, not a column of the grid.
-  There is a box to type it into so the copied block is complete; it is drawn
-  as yours, not as something that was read.
-- **Distressed Market Competition** is a judgement. MRED gives a short sale its
-  own status code and gives an REO, a relocation or an estate sale none, so the
-  app counts the `SS` rows, says the count, says what a status code cannot
-  show, and leaves the Yes/No alone.
+Two boxes of that section are missing, on purpose. **Lookback Period** is a
+parameter of your search rather than a column of the grid, and **Distressed
+Market Competition** is a judgement — MRED gives a short sale its own status
+code and gives an REO, a relocation or an estate sale none. Nothing in a
+screenshot answers either one, so neither appears here: every figure on this
+panel is one the app read off your grid.
 
 The paste box moves below the results once there is something to show, so the
 numbers are the first thing on the page on every subsequent paste.

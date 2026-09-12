@@ -405,7 +405,6 @@ const UAD_GROUPS = [
   { id: 'active',     title: 'Active Listings' },
   { id: 'sales',      title: 'Sales Within Lookback Period' },
   { id: 'pending',    title: 'Pending Sales' },
-  { id: 'distressed', title: 'Distressed Market Competition' },
 ];
 
 /**
@@ -422,13 +421,13 @@ const UAD_GROUPS = [
  * far commoner failure than the reverse. `display` is the readable form, shown
  * on screen so a figure can be checked against the screenshot at a glance.
  *
- * `sourced: 'you'` marks the two fields this app cannot read: the lookback
- * period is a parameter of the search rather than a column of the grid, and
- * whether the market is distressed is a judgement. Neither is ever filled in
- * with a guess dressed up as a reading.
+ * Two of the section's boxes are not here at all: the lookback period, which is
+ * a parameter of the search rather than a column of the grid, and the distress
+ * question, which is a judgement. Neither can be read off a screenshot, and a
+ * panel of figures the app DID read is not the place to park a box it did not
+ * — so they are left to the form, where the appraiser answers them.
  */
-function uadFields(report, opts) {
-  const o = opts || {};
+function uadFields(report) {
   const a = report.summary.active;
   const p = report.summary.pending;
   const c = report.summary.closed;
@@ -458,11 +457,6 @@ function uadFields(report, opts) {
         : `Median MT of all ${a.count} active listings.` +
           (c.marketTime ? ` Closed sales: ${formatDays(c.marketTime.median)} days.` : '');
 
-  const lookback = (typeof o.lookbackMonths === 'number' && isFinite(o.lookbackMonths) &&
-                    o.lookbackMonths > 0)
-    ? whole(Math.round(o.lookbackMonths))
-    : { value: null, display: '—' };
-
   return [
     f('active', 'Active Listings', whole(a.count),
       { unit: a.count === 1 ? 'listing' : 'listings' }),
@@ -472,9 +466,6 @@ function uadFields(report, opts) {
     f('active', 'Median List Price', price(a.median), { money: true }),
     f('active', 'Highest List Price', price(a.high), { money: true }),
 
-    f('sales', 'Lookback Period', lookback,
-      { unit: 'months', sourced: 'you', editable: 'lookbackMonths',
-        note: 'A parameter of your search, not a column of the grid.' }),
     f('sales', 'Sales in Lookback Period', whole(c.count),
       { unit: c.count === 1 ? 'sale' : 'sales',
         note: c.missing ? `${c.priced} of ${c.count} carried a readable sold price.` : null }),
@@ -484,35 +475,7 @@ function uadFields(report, opts) {
 
     f('pending', 'Pending Sales', whole(p.count),
       { unit: p.count === 1 ? 'sale' : 'sales' }),
-
-    f('distressed', 'Distressed Market Competition',
-      { value: null, display: 'your call' },
-      { sourced: 'you', note: distressedObservation(report) }),
   ];
-}
-
-/**
- * What the grid can say about distress, which is less than the form asks.
- *
- * MRED gives a short sale its own status code and gives an REO, a relocation
- * sale or an estate sale none, so the honest answer here is an observation and
- * a caveat, never a Yes or a No. Answering it outright would be exactly the
- * confident wrong number this app exists to avoid.
- */
-function distressedObservation(report) {
-  let ss = 0, total = 0;
-  for (const id of REPORTED_BUCKETS) {
-    for (const e of report.buckets[id]) {
-      total++;
-      if (normalizeStatusCode(e.status) === 'SS') ss++;
-    }
-  }
-  if (!total) return 'Nothing was counted, so there is nothing to observe.';
-  return (ss
-    ? `${ss} short sale${ss === 1 ? '' : 's'} (SS) among the ${total} listings counted. `
-    : `No short-sale (SS) codes among the ${total} listings counted. `) +
-    'REO, relocation and estate sales carry no status code of their own, so this is an ' +
-    'observation, not an answer.';
 }
 
 /**
@@ -522,7 +485,7 @@ function distressedObservation(report) {
  * someone who selects this by hand, bypassing a disabled button, must still be
  * told the reading is incomplete.
  */
-function uadFieldsAsText(report, opts) {
+function uadFieldsAsText(report) {
   const lines = [];
   if (report.provisional) {
     lines.push('*** PROVISIONAL — do not use without checking: ***');
@@ -531,7 +494,7 @@ function uadFieldsAsText(report, opts) {
   }
 
   lines.push('UAD 3.6 — Search Result Metrics');
-  const fields = uadFields(report, opts);
+  const fields = uadFields(report);
 
   for (const g of UAD_GROUPS) {
     const mine = fields.filter(x => x.group === g.id);
@@ -539,13 +502,6 @@ function uadFieldsAsText(report, opts) {
     lines.push('');
     lines.push(g.title);
     for (const x of mine) {
-      /* A field with nothing to fill in and no way to read it — the distress
-       * question — prints what the grid CAN say instead of a dotted line and a
-       * dash, which would read as a value that failed to come through. */
-      if (x.value === null && x.sourced === 'you') {
-        if (x.note) lines.push(`  ${x.note}`);
-        continue;
-      }
       const val = x.value === null ? '—' : x.value;
       lines.push(`  ${(x.label + ' ').padEnd(26, '.')} ${val}` +
                  (x.unit && x.value !== null ? ` ${x.unit}` : ''));
@@ -563,6 +519,5 @@ if (typeof module !== 'undefined' && module.exports) {
     median, medianPrice, medianDays, formatPrice, formatDays, formatRatio,
     saleToListRatio, compLines, summarizeBucket, priceForRow, buildReport,
     reportAsText, reportAsTsv, UAD_GROUPS, uadFields, uadFieldsAsText,
-    distressedObservation,
   };
 }
