@@ -103,14 +103,38 @@ fileInput.addEventListener('change', () => {
   fileInput.value = '';
 });
 
-dropZone.addEventListener('dragover', (e) => {
+/* A file can be dropped anywhere on the page, not only on the drop zone — once
+ * there are results the drop zone is at the bottom. Only drags carrying files
+ * are taken, so dragging text into a review-table field still works. The
+ * enter/leave counter is there because both fire for every child element the
+ * pointer crosses; without it the overlay flickers. */
+const isFileDrag = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
+let dragDepth = 0;
+
+function setDragging(on) {
+  document.body.classList.toggle('is-dragging', on);
+  dropZone.classList.toggle('drag-over', on);
+}
+
+document.addEventListener('dragenter', (e) => {
+  if (!isFileDrag(e)) return;
   e.preventDefault();
-  dropZone.classList.add('drag-over');
+  if (dragDepth++ === 0) setDragging(true);
 });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', (e) => {
+document.addEventListener('dragover', (e) => {
+  if (!isFileDrag(e)) return;
   e.preventDefault();
-  dropZone.classList.remove('drag-over');
+  e.dataTransfer.dropEffect = 'copy';
+});
+document.addEventListener('dragleave', (e) => {
+  if (!isFileDrag(e)) return;
+  if (--dragDepth <= 0) { dragDepth = 0; setDragging(false); }
+});
+document.addEventListener('drop', (e) => {
+  if (!isFileDrag(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  setDragging(false);
   if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
 });
 
