@@ -84,14 +84,13 @@
       <div class="status hidden" id="status-area"></div>
     </section>
 
+    <!-- Anything that affects the numbers: warnings and errors only -->
+    <section class="card card--wide hidden" id="notice-card">
+      <div class="notice-list" id="notice-list"></div>
+    </section>
+
     <!-- The form fields, in the form's own order -->
     <section class="card card--wide hidden" id="uad-card">
-      <div class="card__title">Search Result Metrics</div>
-      <p class="section-note">
-        The form's own fields, in the form's own order. <strong>Click a value to copy it</strong> —
-        what lands on the clipboard is the bare number the field takes (<code>189900</code>), because
-        the form draws the <code>$</code> outside the box and groups the digits itself.
-      </p>
       <div class="uad-provisional hidden" id="uad-provisional"></div>
       <div class="uad-grid" id="uad-grid"></div>
       <div class="action-row">
@@ -99,32 +98,6 @@
 Copy every field
         </button>
         <span class="uad-live" id="uad-live" role="status" aria-live="polite"></span>
-      </div>
-    </section>
-
-    <!-- Summary -->
-    <section class="card card--wide hidden" id="summary-card">
-      <div class="card__title">Market Summary</div>
-
-      <div class="notice-list" id="notice-list"></div>
-
-      <div class="summary-grid" id="summary-grid"></div>
-
-      <div class="action-row">
-        <div class="tab-row">
-          <button class="tab is-active" data-format="uad">Form fields</button>
-          <button class="tab" data-format="text">Report text</button>
-          <button class="tab" data-format="tsv">Spreadsheet</button>
-          <button class="tab" data-format="rows">Every row</button>
-        </div>
-        <textarea class="output-box" id="output-box" readonly rows="8"
-                  placeholder="The summary will appear here…"></textarea>
-        <div class="action-row">
-          <button class="btn btn--copy" id="copy-btn" disabled>
-Copy to Clipboard
-          </button>
-          <p class="section-note hidden" id="copy-note" style="margin-top:0.6rem"></p>
-        </div>
       </div>
     </section>
 
@@ -196,6 +169,7 @@ Copy to Clipboard
         <span class="debug-chevron">▸</span>
       </div>
       <div class="debug-body hidden" id="debug-body">
+        <div class="notice-list" id="note-list"></div>
         <div class="debug-perf" id="debug-perf"></div>
         <canvas id="debug-canvas"></canvas>
         <div id="debug-clusters"></div>

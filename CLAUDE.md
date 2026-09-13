@@ -22,9 +22,9 @@ Concretely, do not undo any of these without a very good reason:
   number. Anything less and it is a listing whose Stat glyph did not survive.
 - Any unresolved row makes the report provisional and disables copy — the
   per-field copy buttons on the form panel included, because a bare number has
-  nowhere to carry a caveat. The provisional banner is written into the copied
-  text too — the narrative block AND the form-field block — so select-and-copy
-  cannot escape it.
+  nowhere to carry a caveat. The provisional banner is written into the text
+  formats too — the narrative block AND the form-field block — so no route to
+  the clipboard can escape it.
 - Market time is bound by the header label `MT` and by nothing else. It is a
   column of one- to three-digit integers, indistinguishable in the data from
   `# Rms`, `Yr Blt`, `All Beds`, `ASF` and `# Garage`; `CFG.MT_MAX_DAYS` is not
@@ -200,8 +200,10 @@ button between mousedown and mouseup — the copy would silently do nothing.
 ## The comp list
 
 At or below `CFG.COMP_LIST_MAX` closed sales, every sale-to-list ratio is quoted
-individually as well as in aggregate — in the closed card and in the copied
-report text. Two rules that are easy to break:
+individually as well as in aggregate in the report text (`reportAsText`). The
+page no longer draws a market summary — once there are results it shows the
+form panel and nothing above it but warnings and errors; informational notes
+sit under Recognition Detail. Two rules that are easy to break:
 
 - **Grid order, not sorted.** Comp 1 must be the first closed sale on the
   screenshot, or the number cannot be tied back to its row.
