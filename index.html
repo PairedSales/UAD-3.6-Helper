@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UAD 3.6 Helper — Market Activity from an MLS Grid</title>
-  <meta name="description" content="Paste a connectMLS or Matrix search-results screenshot and get the UAD 3.6 Search Result Metrics — active, pending and closed counts with low, high and median prices, and the median days on market. Deterministic template matching, entirely in your browser." />
+  <title>UAD 3.6 Helper — Market Activity from a connectMLS Grid</title>
+  <meta name="description" content="Paste a connectMLS search-results screenshot and get the UAD 3.6 Search Result Metrics — active, pending and closed counts with low, high and median prices, and the median days on market. Deterministic template matching, entirely in your browser." />
 
   <meta name="theme-color" content="#ffffff" />
   <meta name="color-scheme" content="light" />
@@ -15,7 +15,7 @@
   <!-- Social preview -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="UAD 3.6 Helper" />
-  <meta property="og:description" content="Paste a connectMLS or Matrix grid — get the UAD 3.6 Search Result Metrics field by field: counts, low/median/high prices, median days on market, and the sale-to-list ratio net of concessions." />
+  <meta property="og:description" content="Paste a connectMLS grid — get the UAD 3.6 Search Result Metrics field by field: counts, low/median/high prices, median days on market, and the sale-to-list ratio net of concessions." />
   <meta property="og:url" content="https://pairedsales.github.io/UAD-3.6-Helper/" />
   <meta property="og:image" content="https://pairedsales.github.io/UAD-3.6-Helper/docs/screenshot.png" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -38,10 +38,10 @@
 
       <p class="doc-lede">
         <span class="doc-lede__label">What This Page Does</span>
-        Paste a connectMLS or Matrix search-results screenshot, or drop in the search's CSV or TSV
-        export, and the Search Result Metrics below are read from it &mdash; the counts, the lowest,
-        median and highest prices, and the median days on market &mdash; each one ready to click
-        into the form. Nothing you give it leaves this machine.
+        Paste a connectMLS search-results screenshot, or drop in the search's CSV or TSV export, and
+        the Search Result Metrics below are read from it &mdash; the counts, the lowest, median and
+        highest prices, and the median days on market &mdash; each one ready to click into the
+        form. Nothing you give it leaves this machine.
       </p>
     </header>
 
@@ -55,12 +55,12 @@
         <div class="drop-zone__text">
           <strong>Ctrl + V</strong> to paste a screenshot of your search results, or click to upload
           one &mdash; or a <strong>.csv</strong> / <strong>.tsv</strong> export<br />
-          <small>Crop from the header row down. connectMLS: Stat, MT, List Price, Orig List Pr, Sold Pr, CONC &middot; Matrix: St, DOM, List Price, Orig Price, Sold Price</small>
+          <small>Include the header row and the Stat, MT, List Price, Orig List Pr, Sold Pr and CONC columns</small>
         </div>
       </div>
 
       <div class="preview-wrapper hidden" id="preview-wrapper">
-        <img id="preview-img" alt="Pasted MLS grid preview" />
+        <img id="preview-img" alt="Pasted connectMLS grid preview" />
         <div class="preview-file hidden" id="preview-file"></div>
         <button class="preview-clear" id="clear-btn" title="Clear" aria-label="Clear">✕</button>
       </div>
@@ -143,13 +143,10 @@ Copy to Clipboard
       </div>
       <div class="debug-body hidden" id="mapping-body">
         <p class="section-note">
-          Codes found in this screenshot are highlighted. For connectMLS, <code>ACTV</code>,
-          <code>PCHG</code>, <code>FIN</code>, <code>PEND</code> and <code>CLSD</code> are mapped as
-          you specified; for Matrix, <code>A</code>, <code>P</code> and <code>S</code> are Active,
-          Pending and Sold; <code>C</code>, <code>W</code>, <code>X</code> and <code>T</code> count
-          nowhere until you choose, because boards use them differently. The rest use standard
-          appraisal practice and can be changed here.
-          Every card and table below updates immediately.
+          Codes found in this screenshot are highlighted. <code>ACTV</code>, <code>PCHG</code>,
+          <code>FIN</code>, <code>PEND</code> and <code>CLSD</code> are mapped as you specified;
+          the rest use standard appraisal practice and can be changed here. Every card and table
+          below updates immediately.
         </p>
         <div class="mapping-grid" id="mapping-grid"></div>
         <div class="action-row">
@@ -166,7 +163,7 @@ Copy to Clipboard
         recalculates as you type. Untick a row to leave it out entirely.
         <strong>Sale&nbsp;/&nbsp;list</strong> is
         <code>(sold price − concessions) ÷ original list price</code>, shown for closed sales.
-        <strong>MT</strong> is market time in days (connectMLS&rsquo;s MT, Matrix&rsquo;s DOM), and feeds the median days on market.
+        <strong>MT</strong> is market time in days, and feeds the median days on market.
       </p>
       <div class="review-scroll">
         <table class="review-table" id="review-table">
@@ -181,7 +178,7 @@ Copy to Clipboard
               <th>List Price</th>
               <th>Sold Price</th>
               <th>Conc.</th>
-              <th title="Market time — connectMLS MT or Matrix DOM, in days">MT</th>
+              <th title="Market time — connectMLS's days on market">MT</th>
               <th>Counted</th>
               <th>Sale / List</th>
               <th>Conf.</th>

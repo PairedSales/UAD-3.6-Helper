@@ -13,8 +13,6 @@
     "test:table": "node tests/test-table.js",
     "test:files": "node tests/test-files.js",
     "test:edge": "node tests/test-edge-cases.js",
-    "test:matrix": "node tests/test-matrix.js",
-    "fixture:matrix": "node tests/make-matrix-fixture.js --all",
     "build:assets": "node tests/build-assets.js"
   },
   "keywords": [

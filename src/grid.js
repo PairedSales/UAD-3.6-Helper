@@ -89,161 +89,27 @@ function buildSurface(img, scale) {
     if (n) gctx.putImageData(gimg, 0, 0);
   }
 
-  const findBands = () =>
-    classifyBands(findRows(hProjection(bin, W, H), W, CFG.MIN_ROW_DENSITY), k, H);
-  let bands = findBands();
+  const hP = hProjection(bin, W, H);
+  const rawRows = findRows(hP, W, CFG.MIN_ROW_DENSITY);
+  const minH = k * 5;
+  const maxH = k * 30;
+  const rows = rawRows.filter(r => r.h >= minH && r.h <= maxH);
+  const droppedRows = rawRows.filter(r => r.h < minH || r.h > maxH);
+  const medH = medianRowHeight(rows);
 
   const surf = {
     src, rgb, gray, grayClean, bin, W, H, scale: k,
-    rows: bands.rows, rawRows: bands.rawRows, droppedRows: bands.droppedRows,
-    medH: medianRowHeight(bands.rows), thr, shadedBands,
+    rows, rawRows, droppedRows, medH, thr, shadedBands,
     rulesRemoved: stripped.removed, downscaled,
   };
   surf.glyphW = measureGlyphWidth(surf);
 
-  /* Link underlines, then everything that depends on where the ink is. */
-  const underlined = stripUnderlines(surf);
-  if (underlined) {
-    bands = findBands();
-    surf.rows = bands.rows;
-    surf.rawRows = bands.rawRows;
-    surf.droppedRows = bands.droppedRows;
-    surf.medH = medianRowHeight(bands.rows);
-    surf.glyphW = measureGlyphWidth(surf);
-  }
-  surf.underlinesRemoved = underlined;
-  const rows = surf.rows, rawRows = surf.rawRows, droppedRows = surf.droppedRows, medH = surf.medH;
-
   console.log(`[Grid] ${src.width}×${src.height} → ${W}×${H}; Otsu ${thr}; ` +
     `${rawRows.length} raw rows → ${rows.length} kept (${droppedRows.length} out of range); ` +
     `medH ${medH}; glyphW ${surf.glyphW}; ${shadedBands.length} shaded band(s); ` +
-    `${stripped.removed} rule px stripped` + (underlined ? `; ${underlined} underline px stripped` : '') +
-    (downscaled ? `; downscaled ×${downscaled.toFixed(2)}` : ''));
+    `${stripped.removed} rule px stripped` + (downscaled ? `; downscaled ×${downscaled.toFixed(2)}` : ''));
 
   return surf;
-}
-
-/**
- * Sort the raw ink bands into table rows and bands that are not rows.
- *
- * A band too short to be a row is usually a fragment of the row it touches,
- * not a row of its own. At 13px Verdana the tail of a comma and the foot of a
- * '$' hang a pixel below the digits, and on a shaded row the anti-aliased
- * pixel joining them to the glyph falls just under the threshold — so every
- * shaded row of a Matrix grid used to shed a one-pixel band, each one counted
- * as a row that could not be read, blocking the copy on a grid that had lost
- * nothing.
- *
- * So a sliver that sits right against a real row is folded INTO that row, and
- * its ink is then read with the glyphs it belongs to. "Sliver" and "right
- * against" are both fractions of the median row height, never pixel counts: a
- * comma tail is one pixel on a 1x paste and two or three on a Retina one, and
- * a source-pixel bar that absorbed the first shed every row of the second. Anything else out of range is still
- * dropped and still counted: a band that is not beside a row is not a
- * descender, a band that is too tall is not one either, and a sliver touching
- * the top or bottom of the image may be all that is left of a row the
- * screenshot cut off — which is a loss, and has to stay visible as one.
- */
-function classifyBands(rawRows, k, H) {
-  const minH = k * 5;
-  const maxH = k * 30;
-
-  const rows = rawRows.filter(r => r.h >= minH && r.h <= maxH).map(r => ({ y: r.y, h: r.h }));
-  const hs = rows.map(r => r.h).sort((a, b) => a - b);
-  const medH = hs.length ? hs[Math.floor(hs.length / 2)] : 0;
-  const maxFrag = Math.max(1, Math.round(medH * CFG.FRAGMENT_MAX_ROW_FRAC));
-  const maxGap = Math.max(1, Math.round(medH * CFG.FRAGMENT_GAP_ROW_FRAC));
-  const droppedRows = [];
-  let absorbed = 0;
-
-  for (const r of rawRows) {
-    if (r.h >= minH && r.h <= maxH) continue;
-    let host = null;
-    const atEdge = r.y <= 1 || r.y + r.h >= H - 1;
-    if (r.h <= maxFrag && !atEdge) {
-      for (const row of rows) {
-        const gap = r.y >= row.y + row.h ? r.y - (row.y + row.h) : row.y - (r.y + r.h);
-        if (gap >= 0 && gap <= maxGap && (!host || gap < host.gap)) host = { row, gap };
-      }
-    }
-    if (!host) { droppedRows.push(r); continue; }
-    const y0 = Math.min(host.row.y, r.y);
-    const y1 = Math.max(host.row.y + host.row.h, r.y + r.h);
-    host.row.y = y0;
-    host.row.h = y1 - y0;
-    absorbed++;
-  }
-
-  return { rawRows, rows, droppedRows, absorbed };
-}
-
-/**
- * Erase link underlines, in the binary and in the clean grayscale.
- *
- * Matrix draws the MLS number and the address as underlined links. An
- * underline is not a table rule — it spans one cell, not the page, so
- * stripTableRules rightly leaves it — but it does two kinds of damage. It
- * joins every digit of the number into one run of ink, so the number cannot be
- * segmented; and in the compacted surface, where it sits a pixel below its
- * digits, it is a sliver of a band of its own, counted as a row that could not
- * be read and so blocking the copy on a grid that had lost nothing.
- *
- * What makes a run an underline is unambiguous at any scale: it is several
- * GLYPHS long, which no stroke inside a character ever is, and it is as thin
- * as a hairline across most of its length. Where a descender crosses it the
- * ink is thick; those columns are left alone, so no letter loses its tail.
- *
- * Returns the number of pixels erased.
- */
-function stripUnderlines(surf) {
-  const { bin, W, H, grayClean } = surf;
-  const minRun = Math.round(surf.glyphW * CFG.UNDERLINE_MIN_GLYPHS);
-  const maxThick = Math.max(1, Math.round(surf.scale * CFG.UNDERLINE_MAX_THICK_SRC));
-  if (minRun < 4) return 0;
-
-  const erase = [];
-  for (let y = 0; y < H; y++) {
-    let x = 0;
-    while (x < W) {
-      if (bin[y * W + x] !== 0) { x++; continue; }
-      const x0 = x;
-      while (x < W && bin[y * W + x] === 0) x++;
-      if (x - x0 < minRun) continue;
-      /* Only the top row of a thin run starts one; the rows beneath it belong
-       * to the same line and are handled with it. */
-      let thin = 0;
-      const cols = [];
-      for (let cx = x0; cx < x; cx++) {
-        if (y > 0 && bin[(y - 1) * W + cx] === 0) { cols.push(null); continue; }
-        let t = 0;
-        while (y + t < H && bin[(y + t) * W + cx] === 0) t++;
-        if (t <= maxThick) { thin++; cols.push(t); } else cols.push(null);
-      }
-      if (thin / (x - x0) < CFG.UNDERLINE_MIN_THIN_FRAC) continue;
-      for (let i = 0; i < cols.length; i++) if (cols[i]) erase.push([x0 + i, y, cols[i]]);
-    }
-  }
-  if (!erase.length) return 0;
-
-  const gctx = grayClean.getContext('2d', { willReadFrequently: true });
-  const gimg = gctx.getImageData(0, 0, W, H);
-  let n = 0;
-  for (const [x, y, t] of erase) {
-    for (let dy = 0; dy < t; dy++) {
-      const i = (y + dy) * W + x;
-      if (bin[i] === 0) { bin[i] = 1; n++; }
-      gimg.data[i * 4] = gimg.data[i * 4 + 1] = gimg.data[i * 4 + 2] = 255;
-    }
-    /* The anti-aliased fringe the threshold did not count as ink would
-     * otherwise come back as ink once the crop is upscaled and re-thresholded. */
-    for (const yy of [y - 1, y + t]) {
-      if (yy < 0 || yy >= H) continue;
-      const i = yy * W + x;
-      if (bin[i] !== 0) gimg.data[i * 4] = gimg.data[i * 4 + 1] = gimg.data[i * 4 + 2] = 255;
-    }
-  }
-  gctx.putImageData(gimg, 0, 0);
-  return n;
 }
 
 /**
@@ -464,43 +330,6 @@ function tokenAt(col, row) {
 /* -------------------------------------------------------------------- */
 
 /**
- * Match one header cell against the known labels.
- *
- * The cell is also tried with its LAST glyph dropped, for a sort indicator
- * drawn as an icon rather than a character. Matrix glues a bold arrow to the
- * label of the sorted column, and correlated whole, "Orig Price" plus an arrow
- * matches nothing — so the column the grid is sorted by, which is very often a
- * price, is the one whose header goes unread.
- *
- * The trimmed reading has to EARN its place. A real label with its last letter
- * cut off correlates worse with that label than the whole word does, so on a
- * cell that has no icon the untrimmed reading wins and nothing changes. Only
- * when the dropped glyph was foreign ink does trimming score clearly higher,
- * and only a narrow glyph — an icon, not a word — is ever dropped.
- */
-function matchHeaderToken(surf, token, candidates, font, weight) {
-  const whole = matchWord(
-    rasterizeBox(surf.gray, token.bbox.x, token.bbox.y, token.bbox.w, token.bbox.h),
-    candidates, font, weight);
-
-  const glyphs = token.glyphs.slice().sort((a, b) => a.bbox.x - b.bbox.x);
-  if (glyphs.length < 3) return whole;
-  const last = glyphs[glyphs.length - 1].bbox;
-  if (last.w > surf.glyphW * CFG.HEADER_ICON_MAX_GLYPHS) return whole;
-
-  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  for (const g of glyphs.slice(0, -1)) {
-    x0 = Math.min(x0, g.bbox.x); x1 = Math.max(x1, g.bbox.x + g.bbox.w);
-    y0 = Math.min(y0, g.bbox.y); y1 = Math.max(y1, g.bbox.y + g.bbox.h);
-  }
-  const trimmed = matchWord(rasterizeBox(surf.gray, x0, y0, x1 - x0, y1 - y0), candidates, font, weight);
-  if (trimmed && (!whole || trimmed.score >= whole.score + CFG.HEADER_TRIM_MIN_GAIN)) {
-    return Object.assign({}, trimmed, { trimmedIcon: true });
-  }
-  return whole;
-}
-
-/**
  * Find the header row.
  *
  * Searched over the top HEADER_MAX_ROWS rows rather than just the first two:
@@ -512,12 +341,16 @@ function matchHeaderToken(surf, token, candidates, font, weight) {
  * chosen header are discarded, so preferring a lower row over a valid one
  * above it deletes a real listing without a trace.
  */
-function findHeaderRow(surf, knownFont, knownWeight) {
+function findHeaderRow(surf, knownFont) {
   if (surf.rows.length < 3) return null;
 
-  /* A sort indicator is drawn on whichever column the grid is sorted by — see
-   * headerCandidates. */
-  const { base: labels, all: candidates } = headerCandidates();
+  const candidates = [];
+  for (const h of HEADER_LABELS) {
+    candidates.push(h.text);
+    /* A sort arrow is drawn on whichever column the grid is sorted by. Only
+     * the columns we act on are worth doubling the candidate set for. */
+    if (ANCHOR_HEADER_ROLES.includes(h.role)) candidates.push(h.text + '▲', h.text + '▼');
+  }
 
   const limit = Math.min(CFG.HEADER_MAX_ROWS, surf.rows.length - 1);
   for (let i = 0; i < limit; i++) {
@@ -528,33 +361,35 @@ function findHeaderRow(surf, knownFont, knownWeight) {
 
     /* The font is a property of the screenshot, so it is chosen once — by the
      * header-band pass if that ran, and only here otherwise. */
-    let font = knownFont, weight = knownWeight;
-    if (!font || !weight) {
+    let font = knownFont;
+    if (!font) {
       const rasters = tokens
         .map(t => rasterizeBox(surf.gray, t.bbox.x, t.bbox.y, t.bbox.w, t.bbox.h))
         .filter(Boolean);
-      ({ font, weight } = pickFont(rasters, labels, CFG.SYNTH_WEIGHTS));
+      font = pickFont(rasters, candidates, 'bold').font;
     }
 
     const matches = [];
+    const seen = new Set();
     for (const t of tokens) {
-      const m = matchHeaderToken(surf, t, candidates, font, weight);
+      const raster = rasterizeBox(surf.gray, t.bbox.x, t.bbox.y, t.bbox.w, t.bbox.h);
+      const m = matchWord(raster, candidates, font, 'bold');
       if (!m || m.score < CFG.HEADER_MIN_WORD_SCORE) continue;
-      const base = headerLabelOf(m.text);
+      const base = m.text.replace(/[▲▼]$/, '');
       const entry = HEADER_LABELS.find(h => h.text === base);
-      matches.push({ token: t, label: base, role: headerMatchRole(entry ? entry.role : 'text', m.score),
-                     score: m.score });
+      matches.push({ token: t, label: base, role: entry ? entry.role : 'text', score: m.score });
+      seen.add(entry ? entry.role : 'text');
     }
 
-    const anchors = countHeaderAnchors(matches);
+    const anchors = ANCHOR_HEADER_ROLES.filter(r => seen.has(r)).length;
     const qualifies = matches.length >= CFG.HEADER_MIN_LABELS && anchors >= CFG.HEADER_MIN_ANCHORS;
 
     console.log(`[Header] row ${i} (y=${row.y}): ${tokens.length} tokens, ` +
-      `${matches.length} labels, ${anchors} anchors in ${weight} ${font}` +
+      `${matches.length} labels, ${anchors} anchors in ${font}` +
       (qualifies ? ' → HEADER' : '') +
       (matches.length ? ` — ${matches.map(m => `${m.label}:${m.score.toFixed(2)}`).join(', ')}` : ''));
 
-    if (qualifies) return { row, index: i, tokens, matches, font, weight, skippedAbove: i };
+    if (qualifies) return { row, index: i, tokens, matches, font, skippedAbove: i };
   }
 
   return null;
@@ -745,12 +580,6 @@ function bindHeaderRoles(header, cols) {
   const ordered = header.matches.slice().sort((a, b) => b.score - a.score);
 
   for (const m of ordered) {
-    /* One column per role we act on, and it is the best-matching label's. A
-     * second, weaker match for the same role — "Orig Price" scored as a poor
-     * "Sold Price", "BR" as a poor "St" — used to tag its own column with that
-     * role as well, and a caller walking the column map could meet the wrong
-     * one first: a status vocabulary run over a column of bedroom counts. */
-    if (ACTED_HEADER_ROLES.includes(m.role) && byRole.has(m.role)) continue;
     const mid = m.token.bbox.x + m.token.bbox.w / 2;
     let best = null;
     for (const col of cols) {
@@ -812,7 +641,7 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols, cl
   }
 
   const found = [];
-  const { byRole, roles: labelled } = bindHeaderRoles(header, cols);
+  const { byRole } = bindHeaderRoles(header, cols);
 
   /* A header label only binds a role to a column of the right KIND. "Sold Pr"
    * sitting above a column that holds no money — which is exactly what happens
@@ -850,8 +679,6 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols, cl
     let best = null;
     for (const m of money) {
       if (m === result.list || m === result.orig) continue;
-      /* A column the header labelled as something else is not the sold price. */
-      if (labelled.has(m.col)) continue;
 
       /* Agreement alone is not evidence. On a grid that is almost all closed
        * sales, an always-populated asking-price column agrees with the closed
@@ -886,21 +713,12 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols, cl
     }
   }
 
-  /* --- 3. List and Orig: the always-populated money columns ---
-   *
-   * Only columns the header did NOT label are available to a positional guess.
-   * A column already bound to a role is spoken for, and a column labelled with
-   * anything else has been positively ruled out. Without this, a Matrix layout
-   * that carries "Sold Price" and "Orig Price" but no current list price had
-   * its Orig Price column re-bound as the list price, by position — so every
-   * active listing was summarized on the price it was FIRST offered at, which
-   * is the cross-source substitution this app exists to refuse. */
-  const unlabelled = m => m !== result.sold && m !== result.list && m !== result.orig &&
-                          m !== result.conc && !labelled.has(m.col);
-  const dense = money.filter(m => unlabelled(m) && m.fillFrac >= CFG.DENSE_COL_MIN_FRAC);
+  /* --- 3. List and Orig: the always-populated money columns --- */
+  const dense = money.filter(m =>
+    m !== result.sold && m.fillFrac >= CFG.DENSE_COL_MIN_FRAC);
 
   if (!result.list) {
-    const avail = dense;
+    const avail = dense.filter(m => m !== result.orig);
     if (avail.length) {
       result.list = avail[avail.length - 1];       /* rightmost */
       result.methodBy.list = 'position';
@@ -910,7 +728,7 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols, cl
       }
       if (!result.method) result.method = 'position';
     } else {
-      const rest = money.filter(unlabelled);
+      const rest = money.filter(m => m !== result.sold);
       if (rest.length) {
         result.list = rest[rest.length - 1];
         result.methodBy.list = 'position';
@@ -920,7 +738,7 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols, cl
   }
 
   if (!result.orig) {
-    const avail = dense.filter(unlabelled);
+    const avail = dense.filter(m => m !== result.list);
     if (avail.length) { result.orig = avail[avail.length - 1]; result.methodBy.orig = 'position'; }
   }
 
@@ -980,15 +798,9 @@ function assignRoles(allMoney, integers, statusByRow, dataRows, header, cols, cl
    * were positional guesses — full stated confidence over an invented answer. */
   const STRENGTH = { header: 0.95, 'fill-pattern': 0.75, position: 0.45 };
   const feeding = ['list', 'sold'];
-  /* An ABSENT role is not a guess, and is not scored as one. It feeds no number
-   * — the rows it would have priced come out unpriced, which gates the copy on
-   * its own and says why — so folding it in here only produced a second,
-   * false reason ("the money columns were inferred") beside a header that had
-   * in fact named every column it found. A missing column is reported by name
-   * in the pipeline instead. */
-  const present = feeding.filter(role => result[role]);
-  let weakest = present.length ? 0.95 : 0.2;
-  for (const role of present) {
+  let weakest = 0.95;
+  for (const role of feeding) {
+    if (!result[role]) { weakest = Math.min(weakest, 0.2); continue; }
     weakest = Math.min(weakest, STRENGTH[result.methodBy[role]] || 0.45);
   }
   result.confidence = Math.max(0.2, weakest - result.problems.length * 0.2);
@@ -1121,47 +933,26 @@ function readMarketTimeColumn(surf, dataRows, cols, bank, uiFont, headerRoles) {
   return { col, values, read: values.size, unreadable, blank };
 }
 
-/**
- * Find the MLS # column, used to flag duplicate listings.
- *
- * MRED numbers are eight digits, and that shape alone is enough to find the
- * column. Other MLSs use other lengths — Matrix's Cedar Rapids board uses
- * seven — and a seven-digit shape is not distinctive on its own, so any other
- * length is accepted only in the column the header labelled as the MLS number.
- * Whatever the length, every cell of the column has to agree on it.
- */
-function findMlsColumn(surf, cols, bank, headerRoles, altBank) {
-  const readWith = (token, b) => {
-    let str = '', worst = 1;
-    for (const g of token.tall) {
-      const norm = normalizeGlyph(surf.gray, g.x, g.y, g.w, g.h);
-      norm.features = computeStructuralFeatures(norm.binary, CFG.NORM_W, CFG.NORM_H, norm.grayscale);
-      const cls = classifyGlyph(norm, b);
-      if (isAmbiguous(cls)) return null;
-      str += String(cls.digit);
-      worst = Math.min(worst, cls.score);
-    }
-    return (/^\d+$/.test(str) && worst >= CFG.MIN_DIGIT_SCORE) ? str : null;
-  };
-
+/** Find the 8-digit MLS # column, used to flag duplicate listings. */
+function findMlsColumn(surf, cols, bank) {
   let best = null;
   for (const col of cols) {
-    const named = !!(headerRoles && headerRoles.get(col) === 'mls');
-    let digits = CFG.MLS_DIGITS;
-    if (named) {
-      const counts = new Map();
-      for (const t of col.cells.values()) counts.set(t.tall.length, (counts.get(t.tall.length) || 0) + 1);
-      const [mode] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0] || [0];
-      if (mode >= CFG.MLS_MIN_DIGITS && mode <= CFG.MLS_MAX_DIGITS) digits = mode;
-    }
-    const cells = Array.from(col.cells.entries()).filter(([, t]) => t.tall.length === digits);
+    const cells = Array.from(col.cells.entries()).filter(([, t]) => t.tall.length === CFG.MLS_DIGITS);
     if (cells.length < Math.max(2, col.cells.size * 0.6)) continue;
 
     const values = new Map();
     let ok = 0;
     for (const [row, token] of cells) {
-      const str = readWith(token, bank) || (altBank ? readWith(token, altBank) : null);
-      if (str && str.length === digits) {
+      let str = '', worst = 1, ambiguous = false;
+      for (const g of token.tall) {
+        const norm = normalizeGlyph(surf.gray, g.x, g.y, g.w, g.h);
+        norm.features = computeStructuralFeatures(norm.binary, CFG.NORM_W, CFG.NORM_H, norm.grayscale);
+        const cls = classifyGlyph(norm, bank);
+        if (isAmbiguous(cls)) { ambiguous = true; break; }
+        str += String(cls.digit);
+        worst = Math.min(worst, cls.score);
+      }
+      if (!ambiguous && /^\d{8}$/.test(str) && worst >= CFG.MIN_DIGIT_SCORE) {
         values.set(row, str);
         ok++;
       }
