@@ -132,7 +132,7 @@ the only misreads that move a bucket and still get accepted.
 (`header`, `fill-pattern`, `position`). The reported confidence is the WEAKEST
 of the roles that feed a number, not the best method used for any role — a
 header that matched only "CONC" must not report 95% over two positional guesses.
-Keep it that way, and keep the column map showing provenance per row.
+Keep it that way, and keep the column map (under Recognition Detail) showing provenance per row.
 
 ## Locate cheaply, read narrowly
 
@@ -203,7 +203,9 @@ At or below `CFG.COMP_LIST_MAX` closed sales, every sale-to-list ratio is quoted
 individually as well as in aggregate in the report text (`reportAsText`). The
 page no longer draws a market summary — once there are results it shows the
 form panel and nothing above it but warnings and errors; informational notes
-sit under Recognition Detail. Two rules that are easy to break:
+sit under Recognition Detail. Below the fields, the Form fields / Report text /
+Spreadsheet / Every row tabs copy the same reading in each format. Two rules
+that are easy to break:
 
 - **Grid order, not sorted.** Comp 1 must be the first closed sale on the
   screenshot, or the number cannot be tied back to its row.

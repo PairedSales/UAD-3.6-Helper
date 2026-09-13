@@ -171,7 +171,7 @@ async function extractGrid(img, onProgress) {
     warnings.push({
       level: 'warn',
       text: 'No header row was recognized, so the money columns had to be identified from the ' +
-            'data itself. Check the column assignment below before using these numbers.',
+            'data itself. Check the column map under Recognition Detail before using these numbers.',
     });
   } else if (header.skippedAbove > 0) {
     skipped.aboveHeader = header.skippedAbove;
@@ -305,7 +305,7 @@ async function extractGrid(img, onProgress) {
         ? 'The MT (market time) column was found but every cell in it is empty, so there is no ' +
           'median days on market.'
         : 'The MT (market time) column was found, but no cell in it read as a day count — so ' +
-          'there is no median days on market. Check the column map below against your ' +
+          'there is no median days on market. Check the column map under Recognition Detail against your ' +
           'screenshot, or fill the values in by hand.',
     });
   } else if (marketTimeCol.unreadable) {

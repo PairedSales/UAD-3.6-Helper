@@ -101,11 +101,21 @@ Copy every field
       </div>
     </section>
 
-    <!-- Column assignment -->
-    <section class="card card--wide hidden" id="columns-card">
-      <div class="card__title">Columns Used</div>
-      <p class="section-note" id="columns-note"></p>
-      <div class="column-map" id="column-map"></div>
+    <!-- The same reading, in each format it can be pasted as -->
+    <section class="card card--wide hidden" id="output-card">
+      <div class="tab-row">
+        <button class="tab is-active" data-format="uad">Form fields</button>
+        <button class="tab" data-format="text">Report text</button>
+        <button class="tab" data-format="tsv">Spreadsheet</button>
+        <button class="tab" data-format="rows">Every row</button>
+      </div>
+      <textarea class="output-box" id="output-box" readonly rows="8"></textarea>
+      <div class="action-row">
+        <button class="btn btn--copy" id="copy-btn" disabled>
+Copy to Clipboard
+        </button>
+        <p class="section-note hidden" id="copy-note" style="margin-top:0.6rem"></p>
+      </div>
     </section>
 
     <!-- Status mapping -->
@@ -170,6 +180,9 @@ Copy every field
       </div>
       <div class="debug-body hidden" id="debug-body">
         <div class="notice-list" id="note-list"></div>
+        <!-- Which column fed which number, and how each was decided -->
+        <p class="section-note" id="columns-note"></p>
+        <div class="column-map" id="column-map"></div>
         <div class="debug-perf" id="debug-perf"></div>
         <canvas id="debug-canvas"></canvas>
         <div id="debug-clusters"></div>
