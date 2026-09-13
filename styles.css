@@ -370,6 +370,23 @@ body {
   color: var(--success);
 }
 
+/* ===== Output box ===== */
+.output-box {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--ink);
+  background: #fbfbfb;
+  border: 1px solid var(--rule-grey);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.7rem;
+  resize: vertical;
+}
+
+.output-box:focus { outline: none; border-color: var(--blue); }
+.output-box::placeholder { color: var(--ink-faint); }
+
 /* ===== Status line ===== */
 .status {
   margin-top: 0.7rem;
@@ -820,6 +837,37 @@ body {
 
 .column-map__role { min-width: 9em; font-weight: 700; color: var(--ink); }
 .column-map__how  { font-size: 0.7rem; color: var(--ink-muted); }
+
+/* ===== Output format tabs ===== */
+.tab-row {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--ink);
+}
+
+.tab {
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--band);
+  border: 1px solid var(--band-line);
+  border-bottom: none;
+  padding: 0.22rem 0.7rem;
+  margin-right: 2px;
+  cursor: pointer;
+}
+
+.tab:hover { color: var(--ink); background: #dedede; }
+
+.tab.is-active {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--ink);
+  border-bottom: 1px solid var(--paper);
+  margin-bottom: -1px;
+}
 
 /* =====================================================================
  *  Recognition detail

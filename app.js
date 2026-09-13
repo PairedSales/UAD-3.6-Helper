@@ -30,10 +30,13 @@ const uadGrid      = $('#uad-grid');
 const uadProvisional = $('#uad-provisional');
 const uadCopyAll   = $('#uad-copy-all');
 const uadLive      = $('#uad-live');
+const outputCard   = $('#output-card');
+const outputBox    = $('#output-box');
+const copyBtn      = $('#copy-btn');
+const copyNote     = $('#copy-note');
 const noticeCard   = $('#notice-card');
 const noticeList   = $('#notice-list');
 const noteList     = $('#note-list');
-const columnsCard  = $('#columns-card');
 const columnsNote  = $('#columns-note');
 const columnMap    = $('#column-map');
 const mappingCard  = $('#mapping-card');
@@ -53,6 +56,7 @@ let currentInput = null;
 let lastResult = null;      /* raw pipeline output */
 let rows = [];              /* editable working copy */
 let statusMapping = defaultStatusMapping();
+let outputFormat = 'uad';
 let lastReport = null;
 /* Bumped on every new image. A run whose token is stale writes nothing: two
  * pastes in quick succession otherwise leave the slower image's numbers on
@@ -124,9 +128,30 @@ for (const id of ['debug-toggle', 'mapping-toggle']) {
   });
 }
 
+for (const tab of document.querySelectorAll('.tab[data-format]')) {
+  tab.addEventListener('click', () => {
+    outputFormat = tab.dataset.format;
+    for (const t of document.querySelectorAll('.tab[data-format]')) {
+      t.classList.toggle('is-active', t === tab);
+    }
+    renderOutput();
+  });
+}
+
 $('#mapping-reset').addEventListener('click', () => {
   statusMapping = defaultStatusMapping();
   recompute();
+});
+
+copyBtn.addEventListener('click', async () => {
+  if (copyBtn.disabled) return;
+  const ok = await copyToClipboard(outputBox.value);
+  copyBtn.classList.toggle('copied', ok);
+  copyBtn.innerHTML = ok ? '<span>✅</span> Copied' : '<span>⚠️</span> Copy failed';
+  setTimeout(() => {
+    copyBtn.classList.remove('copied');
+    copyBtn.innerHTML = '<span>📋</span> Copy to Clipboard';
+  }, 1600);
 });
 
 uadCopyAll.addEventListener('click', async () => {
@@ -231,12 +256,14 @@ function resetResults() {
   lastResult = null;
   lastReport = null;
   rows = [];
-  for (const card of [noticeCard, uadCard, columnsCard, mappingCard, reviewCard, debugCard]) {
+  for (const card of [noticeCard, uadCard, outputCard, mappingCard, reviewCard, debugCard]) {
     card.classList.add('hidden');
   }
   showingResults(false);
   uadGrid.innerHTML = '';
   uadCopyAll.disabled = true;
+  outputBox.value = '';
+  copyBtn.disabled = true;
 }
 
 /**
@@ -349,7 +376,7 @@ async function runAnalysis() {
       return;
     }
 
-    for (const card of [uadCard, columnsCard, mappingCard, reviewCard, debugCard]) {
+    for (const card of [uadCard, outputCard, mappingCard, reviewCard, debugCard]) {
       card.classList.remove('hidden');
     }
     showingResults(true);
@@ -424,6 +451,36 @@ function recompute() {
   renderUad(lastReport);
   renderMapping(lastReport);
   renderReview(lastReport);
+  renderOutput();
+  gateCopy(lastReport);
+}
+
+/**
+ * Copying is only enabled once the reading is complete.
+ *
+ * A provisional summary in the clipboard is a provisional summary in the
+ * report, with nothing in the pasted text to say so.
+ */
+function gateCopy(report) {
+  const blocked = report.provisional;
+  copyBtn.disabled = blocked;
+  if (blocked) {
+    copyNote.textContent =
+      'Copying is off until this reading is complete: ' +
+      report.provisionalReasons.join('; ') +
+      '. Resolve them below, or select the text above by hand — it carries the same caveats.';
+    copyNote.classList.remove('hidden');
+  } else {
+    copyNote.classList.add('hidden');
+  }
+}
+
+function renderOutput() {
+  if (!lastReport) return;
+  if (outputFormat === 'tsv') outputBox.value = reportAsTsv(lastReport);
+  else if (outputFormat === 'rows') outputBox.value = allRowsAsTsv(lastReport);
+  else if (outputFormat === 'text') outputBox.value = reportAsText(lastReport);
+  else outputBox.value = uadFieldsAsText(lastReport);
 }
 
 /* ================================================================== */
