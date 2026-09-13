@@ -1,265 +1,170 @@
 /* =====================================================================
- *  The form is the design.
+ *  UAD 3.6 Helper
  *
- *  This tool fills in one section of the Uniform Residential Appraisal
- *  Report, and it is read side by side with that form. So it is drawn the
- *  way the form is drawn: a white sheet, Arial at reading size, a black
- *  section bar, grey subsection bands, bold black labels against blue
- *  values, and a hairline rule under every field. Nothing glows, nothing
- *  floats and nothing animates — an appraiser checking a figure against a
- *  screenshot should be able to see at a glance which box it belongs in.
+ *  Plain and readable: the system font at 16px, dark text on white, grey
+ *  hairlines, and one blue for things you can click. Numbers get the weight;
+ *  everything else stays out of their way.
  * ===================================================================== */
 
-/* ===== Design Tokens ===== */
 :root {
-  /* Paper and desk */
-  --paper: #ffffff;
-  --desk: #d6d6d6;
-  --band: #e9e9e9;          /* the grey subsection band */
-  --band-line: #d0d0d0;
-  --bar: #17171a;           /* the black section bar */
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --surface-hover: #eef1f4;
 
-  /* Ink */
-  --ink: #000000;
-  --ink-soft: #3d3d3d;
-  --ink-muted: #767676;
-  --ink-faint: #9a9a9a;
+  --text: #1f2328;
+  --text-soft: #424a53;
+  --text-muted: #636c76;
+  --text-faint: #8c959f;
 
-  /* The form prints every value that has been filled in in blue. So does
-   * this — and only values. A number on this page being blue means the same
-   * thing it means on the form. */
-  --blue: #1f5fa9;
-  --blue-dark: #164478;
-  --blue-dim: #eaf1f9;
+  --border: #d0d7de;
+  --border-soft: #e5e9ed;
 
-  /* Rules. Hairlines between fields are the pale blue-grey the form uses;
-   * the rules that open and close a block of fields are black. */
-  --rule: #a9b6c6;
-  --rule-grey: #cfcfcf;
-  --rule-strong: #000000;
+  --accent: #0a58ca;
+  --accent-dark: #0847a6;
+  --accent-dim: #eef4fd;
 
-  /* Four states, each a colour of ink rather than a surface. */
-  --error: #a4132a;
-  --error-dim: #fbeced;
-  --warning: #8a5300;
-  --warning-dim: #fdf3e3;
-  --success: #1a6b33;
-  --success-dim: #ecf5ee;
-  --accent: var(--blue);
-  --accent-dim: var(--blue-dim);
+  --error: #b42318;
+  --error-dim: #fef3f2;
+  --warning: #8a5a00;
+  --warning-dim: #fff8e6;
+  --success: #1a7f37;
+  --success-dim: #edf7ef;
 
-  --font-body: Arial, "Helvetica Neue", Helvetica, "Liberation Sans", sans-serif;
-  --font-mono: Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
 
-  --radius: 0;
-  --radius-sm: 2px;
+  --radius: 6px;
   --transition: 0.12s ease;
 
-  /* A bucket is told apart by its heading, not by its hue. The form is black,
-   * white and blue, and three accent colours would be the one thing on the
-   * page that came from somewhere else. The tokens survive because the bucket
-   * pills and the review table still need something to name. */
-  --bucket-active: var(--blue);
-  --bucket-active-dim: var(--blue-dim);
-  --bucket-pending: var(--blue);
-  --bucket-pending-dim: var(--blue-dim);
-  --bucket-closed: var(--blue);
-  --bucket-closed-dim: var(--blue-dim);
-  --bucket-excluded: var(--ink-muted);
-  --bucket-excluded-dim: #eeeeee;
-
-  /* Aliases kept so rules written against the old palette still say what they
-   * meant, rather than every one of them having to be renamed. */
-  --border-color: var(--rule-grey);
-  --border-glow: var(--ink-muted);
-  --text-primary: var(--ink);
-  --text-secondary: var(--ink-soft);
-  --text-muted: var(--ink-muted);
-  --bg-secondary: #f2f2f2;
+  /* Names other code still refers to. */
+  --text-primary: var(--text);
+  --text-secondary: var(--text-soft);
+  --bg-secondary: var(--surface);
 }
 
-/* ===== Reset & Base ===== */
+/* ===== Base ===== */
 *, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html {
-  font-size: 16px;
-}
+html { font-size: 16px; }
 
 body {
   font-family: var(--font-body);
-  /* The form's own body text is about 9pt. Everything here is sized from this
-   * one declaration, so the page reads at the size of the thing beside it. */
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  background: var(--desk);
-  color: var(--ink);
-  min-height: 100vh;
+  font-size: 1rem;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
 
+.hidden { display: none !important; }
+
 /* ===== Layout ===== */
-
-/* The sheet. One width for everything on it, the way a page has one width —
- * and it is the results tables that set it. */
 .app-container {
-  max-width: 1060px;
-  margin: 1.6rem auto 3rem;
-  padding: 1.6rem 1.75rem 2rem;
-  background: var(--paper);
-  border: 1px solid var(--ink);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 3rem;
 }
 
-/* Nothing breaks out of the sheet any more. The class is still on the results
- * sections and still means "this one is a table"; it simply no longer has to
- * escape a narrow reading column to get its width. */
-.card--wide {
-  width: 100%;
-}
+.card--wide { width: 100%; }
 
-@media (max-width: 760px) {
-  .app-container {
-    margin: 0;
-    border: none;
-    box-shadow: none;
-    padding: 1rem 0.9rem 2rem;
-  }
-}
+.card + .card { margin-top: 2.5rem; }
 
-/* ===== The document head ===== */
-.app-header {
-  margin-bottom: 1.15rem;
-}
+/* A hidden notice card is still the fields' previous sibling, so without this
+ * the fields would open the page a section-gap below the top edge. */
+.has-results > #notice-card.hidden + #uad-card { margin-top: 0; }
 
-/* The head explains the page to someone who has not used it yet. Once there
+/* The notices sit directly on top of the fields they are about. */
+#notice-card + #uad-card { margin-top: 1.25rem; }
+
+/* ===== Header ===== */
+.app-header { margin-bottom: 2rem; }
+
+/* The header explains the page to someone who has not used it yet. Once there
  * are results it is only in the way of them. */
 .has-results > .app-header { display: none; }
 
-/* Title line: the report name left, what this page is right. */
-.doc-title {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.7rem;
+.app-title {
+  font-size: 1.75rem;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
-.doc-title__name {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--ink);
+.app-lede {
+  margin-top: 0.5rem;
+  max-width: 44rem;
+  font-size: 1.0625rem;
+  color: var(--text-soft);
 }
 
-.doc-title__meta {
-  font-size: 0.75rem;
-  color: var(--ink-soft);
-  text-align: right;
-}
-
-/* The black section bar, and the rule that runs from it to the right margin. */
-.doc-band {
-  display: flex;
-  align-items: stretch;
-  border-bottom: 1px solid var(--ink);
-  margin-bottom: 0.85rem;
-}
-
-.doc-band > span {
-  min-width: 12rem;
-  background: var(--bar);
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.8125rem;
-  padding: 0.2rem 0.7rem;
-}
-
-/* The form's commentary paragraphs: a bold black label, then blue prose. */
-.doc-lede {
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: var(--blue);
-}
-
-.doc-lede__label {
-  font-weight: 700;
-  color: var(--ink);
-  margin-right: 0.4rem;
-}
-
-/* ===== Section ===== */
-.card {
-  background: none;
-  border: none;
-  padding: 0;
-}
-
-.card + .card {
-  margin-top: 1.5rem;
-}
-
-/* The grey subsection band, full width, the way the form bands
- * "Search Result Metrics" and "Housing Trends". */
+/* ===== Section headings ===== */
 .card__title {
-  background: var(--band);
-  border-top: 1px solid var(--band-line);
-  border-bottom: 1px solid var(--band-line);
-  color: var(--ink);
-  font-size: 0.8125rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: none;
-  padding: 0.25rem 0.6rem;
-  margin-bottom: 0.75rem;
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
 }
 
-/* A count or a chevron beside a heading — never as loud as the heading. */
 .card__title span {
-  font-size: inherit;
+  font-size: 1rem;
   font-weight: 400;
-  color: var(--ink-soft);
+  color: var(--text-muted);
 }
 
-/* ===== Drop Zone ===== */
+.section-note {
+  font-size: 0.9375rem;
+  color: var(--text-soft);
+  margin-bottom: 1rem;
+  max-width: 50rem;
+}
+
+.section-note code {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+
+/* ===== Drop zone ===== */
 .drop-zone {
   position: relative;
-  border: 1px dashed var(--rule);
-  border-radius: var(--radius-sm);
-  padding: 1.35rem 1rem;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 2rem 1.25rem;
   text-align: center;
   cursor: pointer;
-  background: #fbfcfd;
+  background: var(--surface);
   transition: border-color var(--transition), background var(--transition);
 }
 
 .drop-zone:hover,
 .drop-zone.drag-over {
-  border-color: var(--blue);
-  background: var(--blue-dim);
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .drop-zone__text {
-  font-size: 0.8125rem;
-  line-height: 1.6;
-  color: var(--ink-soft);
+  font-size: 1rem;
+  color: var(--text-soft);
 }
 
-.drop-zone__text strong {
-  color: var(--ink);
-  font-weight: 700;
-}
+.drop-zone__text strong { color: var(--text); font-weight: 600; }
 
 .drop-zone__text small {
   display: inline-block;
-  margin-top: 0.25rem;
-  font-size: 0.72rem;
-  color: var(--ink-muted);
+  margin-top: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
 .drop-zone input[type="file"] {
@@ -269,13 +174,13 @@ body {
   cursor: pointer;
 }
 
-/* ===== Pasted image ===== */
+/* ===== Pasted input ===== */
 .preview-wrapper {
   position: relative;
-  margin-top: 0.75rem;
-  border: 1px solid var(--rule-grey);
-  background: #fafafa;
-  padding: 0.35rem;
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem;
 }
 
 .preview-wrapper img {
@@ -287,39 +192,33 @@ body {
   object-position: top left;
 }
 
-/* An export has no picture to show, so it gets a line saying what was read. */
 .preview-file {
-  padding: 0.35rem 2rem 0.35rem 0.4rem;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: var(--ink-soft);
+  padding: 0.25rem 2.5rem 0.25rem 0.25rem;
+  color: var(--text-soft);
 }
 
 .preview-file strong {
-  color: var(--ink);
+  color: var(--text);
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .preview-clear {
   position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
-  width: 1.4rem;
-  height: 1.4rem;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1.75rem;
+  height: 1.75rem;
   line-height: 1;
-  border: 1px solid var(--rule-grey);
-  border-radius: var(--radius-sm);
-  background: var(--paper);
-  color: var(--ink-soft);
-  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-soft);
+  font-size: 0.875rem;
   cursor: pointer;
 }
 
-.preview-clear:hover {
-  border-color: var(--error);
-  color: var(--error);
-}
+.preview-clear:hover { border-color: var(--error); color: var(--error); }
 
 /* ===== Buttons ===== */
 .btn {
@@ -328,41 +227,37 @@ body {
   justify-content: center;
   gap: 0.4rem;
   font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  padding: 0.3rem 0.85rem;
-  border: 1px solid var(--ink-muted);
-  border-radius: var(--radius-sm);
-  background: #f4f4f4;
-  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
   cursor: pointer;
-  transition: background var(--transition), border-color var(--transition),
-              color var(--transition);
+  transition: background var(--transition), border-color var(--transition);
 }
 
-.btn:hover:not(:disabled)  { background: #e8e8e8; border-color: var(--ink-soft); }
-.btn:active:not(:disabled) { background: #dcdcdc; }
+.btn:hover:not(:disabled)  { background: var(--surface); border-color: #b8c0c8; }
+.btn:active:not(:disabled) { background: var(--surface-hover); }
+
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .btn:disabled {
   cursor: not-allowed;
-  color: var(--ink-faint);
-  border-color: var(--rule-grey);
-  background: #f7f7f7;
+  color: var(--text-faint);
+  background: var(--surface);
+  border-color: var(--border-soft);
 }
 
 .btn--primary {
-  background: var(--blue);
-  border-color: var(--blue-dark);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
-.btn--primary:hover:not(:disabled) { background: var(--blue-dark); border-color: var(--blue-dark); }
-
-.btn--primary:disabled {
-  background: #eef1f4;
-  border-color: var(--rule-grey);
-  color: var(--ink-faint);
-}
+.btn--primary:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); }
 
 .btn--copy.copied {
   border-color: var(--success);
@@ -370,209 +265,172 @@ body {
   color: var(--success);
 }
 
-/* ===== Output box ===== */
-.output-box {
-  width: 100%;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.55;
-  color: var(--ink);
-  background: #fbfbfb;
-  border: 1px solid var(--rule-grey);
-  border-radius: var(--radius-sm);
-  padding: 0.6rem 0.7rem;
-  resize: vertical;
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
-.output-box:focus { outline: none; border-color: var(--blue); }
-.output-box::placeholder { color: var(--ink-faint); }
+.linkish {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
 
-/* ===== Status line ===== */
+.linkish:hover { color: var(--accent-dark); }
+
+/* ===== Status and progress ===== */
 .status {
-  margin-top: 0.7rem;
-  padding: 0.4rem 0.65rem;
-  border-left: 3px solid var(--rule-grey);
-  background: #f6f6f6;
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-  line-height: 1.5;
+  margin-top: 1rem;
+  padding: 0.6rem 0.85rem;
+  border-left: 3px solid var(--border);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 0.9375rem;
 }
 
 .status--success { border-left-color: var(--success); background: var(--success-dim); color: var(--success); }
 .status--error   { border-left-color: var(--error);   background: var(--error-dim);   color: var(--error); }
-.status--info    { border-left-color: var(--blue);    background: var(--blue-dim);    color: var(--blue-dark); }
+.status--info    { border-left-color: var(--accent);  background: var(--accent-dim);  color: var(--accent-dark); }
 
-/* ===== Progress ===== */
-.progress-container { margin-top: 0.75rem; }
+.progress-container { margin-top: 1rem; }
 
 .progress-label {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--ink-soft);
+  margin-bottom: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
 .progress-bar {
   height: 6px;
-  background: #ececec;
-  border: 1px solid var(--rule-grey);
+  background: var(--surface-hover);
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-bar__fill {
   height: 100%;
-  background: var(--blue);
+  background: var(--accent);
   transition: width 0.2s linear;
 }
 
 .count-badge {
-  display: inline-block;
   margin-left: 0.35rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 400;
-  color: var(--ink-soft);
-}
-
-.action-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.8rem;
+  color: var(--text-muted);
 }
 
 /* ===== Footer ===== */
 .app-footer {
-  margin-top: 2rem;
-  padding-top: 0.55rem;
-  border-top: 1px solid var(--ink);
-  font-size: 0.72rem;
-  color: var(--ink-muted);
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
 .app-footer p + p { margin-top: 0.25rem; }
-.app-footer a,
-.app-footer__links a { color: var(--blue); text-decoration: none; }
-.app-footer a:hover,
-.app-footer__links a:hover { text-decoration: underline; }
-
-.hidden { display: none !important; }
+.app-footer a { color: var(--accent); text-decoration: none; }
+.app-footer a:hover { text-decoration: underline; }
 
 /* =====================================================================
- *  UAD 3.6 — Search Result Metrics
- *
- *  Drawn field for field the way the form draws it: two columns, active
- *  listings over pending sales on the left and the lookback sales on the
- *  right, each block opened and closed by a black rule and each field
- *  underlined. Recognising the shape of the thing you are filling in is
- *  most of what makes transcribing it quick.
+ *  Search Result Metrics — the form fields
  * ===================================================================== */
 
 .uad-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0 2.5rem;
+  gap: 0 2rem;
   align-items: start;
 }
 
-/* Each column runs continuously, the way the form's does: the blocks inside
- * one are stacked, not placed in shared rows, so a tall right column cannot
- * open a gap above the block beneath the left one. renderUad() puts the
- * groups in the form's own arrangement — active over pending on the left and
- * the lookback sales on the right — while the text output keeps the reading
- * order the form prints in. */
+/* Each column runs continuously: active over pending on the left, the
+ * lookback sales on the right, so a tall right column cannot open a gap
+ * above the block beneath the left one. */
 .uad-column { min-width: 0; }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .uad-grid { grid-template-columns: 1fr; }
 }
 
 .uad-group {
-  border-top: 1px solid var(--rule-strong);
-  border-bottom: 1px solid var(--rule-strong);
-  padding: 0;
-  margin-bottom: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1.25rem;
+  overflow: hidden;
 }
 
-/* The heading is not drawn: every block's first field already carries the same
- * words, and on the form that IS the point — "Active Listings" is the row with
- * the count beside it, not a caption above one. It stays in the DOM as the
- * group's name for anything reading the panel structurally. */
-.uad-group__title {
-  display: none;
-}
+/* Every block's first field already carries the group's name. The heading
+ * stays in the DOM for anything reading the panel structurally. */
+.uad-group__title { display: none; }
 
-/* label | value, with the note running under both. The value column starts at
- * a fixed position and its contents are LEFT aligned, because that is where
- * the form puts them — a column of values ranged right would not line up with
- * the page beside it. */
 .uad-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 13rem;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 0.1rem 0.5rem;
-  padding: 0.2rem 0.3rem 0.2rem 0;
-  border-bottom: 1px solid var(--rule);
+  gap: 0.15rem 1rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border-soft);
 }
 
-/* The black rule under the block is the last thing; the last field's own
- * hairline would double it. */
 .uad-field:last-of-type { border-bottom: none; }
 
+/* The first field of a block is its headline figure. */
+.uad-field:first-of-type { background: var(--surface); }
+.uad-field:first-of-type .uad-field__label { font-weight: 600; }
+
 .uad-field__label {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--ink);
-  opacity: 1;
-  /* Every field below the first is indented under it, the way the form indents
-   * "Median Days on Market" beneath "Active Listings". */
-  padding-left: 0.85rem;
+  font-size: 1rem;
+  color: var(--text);
 }
 
-.uad-field:first-of-type .uad-field__label {
-  padding-left: 0;
-}
-
-/* The value IS the button. A number you can click is a smaller target to
- * explain than a number with a button beside it, and this panel is read as a
- * list of values rather than as a list of controls. It is drawn as the form's
- * blue text, not as a control, until you put the pointer on it. */
+/* The value IS the button: a number you click, drawn as a number until the
+ * pointer is on it. */
 .uad-field__value {
   position: relative;
   display: inline-flex;
   align-items: baseline;
-  gap: 0.3rem;
+  justify-content: flex-end;
+  gap: 0.35rem;
   font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 400;
-  color: var(--blue);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--accent);
   background: none;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 0 0.2rem;
-  margin-left: -0.2rem;
-  text-align: left;
+  border-radius: 4px;
+  padding: 0.05rem 0.4rem;
+  margin-right: -0.4rem;
+  text-align: right;
   cursor: pointer;
   transition: background var(--transition), border-color var(--transition);
 }
 
 .uad-field__value:hover:not(:disabled) {
-  background: var(--blue-dim);
-  border-color: var(--rule);
+  background: var(--accent-dim);
+  border-color: #c5d8f5;
 }
 
 .uad-field__value:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-/* A disabled field is disabled for one of two reasons — nothing was read, or
- * the reading is provisional — and the title says which. It must not look like
- * a value you simply have not clicked yet. */
+/* Disabled because nothing was read or because the reading is provisional —
+ * the title says which. It must not look like a value you have not clicked. */
 .uad-field__value:disabled {
   cursor: not-allowed;
-  color: var(--ink-faint);
+  color: var(--text-faint);
 }
 
 .uad-field__value.is-copied {
@@ -582,53 +440,92 @@ body {
 }
 
 .uad-field__value.is-copied::after {
-  content: "copied";
+  content: "Copied";
   position: absolute;
   right: 0;
-  bottom: calc(100% + 2px);
-  font-size: 0.62rem;
-  letter-spacing: 0.04em;
+  bottom: calc(100% + 3px);
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--success);
 }
 
-.uad-field__num {
-  font-variant-numeric: tabular-nums;
-}
+.uad-field__num { font-variant-numeric: tabular-nums; }
 
 .uad-field__unit {
-  font-size: 0.72rem;
-  color: var(--ink-muted);
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
 .uad-field__note {
   grid-column: 1 / -1;
-  padding-left: 0.85rem;
-  font-size: 0.68rem;
-  line-height: 1.45;
-  color: var(--ink-muted);
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
-/* A field whose value the app could not read. Its label greys; the form's own
- * box is then left empty, which is the honest answer. */
-.uad-field--empty .uad-field__label { color: var(--ink-muted); }
+.uad-field--empty .uad-field__label { color: var(--text-muted); }
 
 .uad-provisional {
-  margin-bottom: 0.9rem;
-  padding: 0.45rem 0.7rem;
-  border: 1px solid #e3c489;
+  margin-bottom: 1.25rem;
+  padding: 0.7rem 0.9rem;
   border-left: 3px solid var(--warning);
+  border-radius: 0 var(--radius) var(--radius) 0;
   background: var(--warning-dim);
   color: var(--warning);
-  font-size: 0.78rem;
-  line-height: 1.5;
+  font-size: 0.9375rem;
 }
 
 .uad-live {
-  margin-left: 0.6rem;
-  align-self: center;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   color: var(--success);
 }
+
+/* =====================================================================
+ *  Copy formats
+ * ===================================================================== */
+
+.tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.75rem;
+}
+
+.tab {
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+
+.tab:hover { color: var(--text); }
+
+.tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.output-box {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+  resize: vertical;
+}
+
+.output-box:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 /* =====================================================================
  *  Notices
@@ -636,36 +533,33 @@ body {
 
 .notice-list {
   display: grid;
-  gap: 0.3rem;
-  margin-bottom: 0.9rem;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 #notice-card .notice-list { margin-bottom: 0; }
 
-/* A hidden notice card is still the fields' previous sibling, so without this
- * the fields would open the page a section-gap below the top edge. */
-.has-results > #notice-card.hidden + #uad-card { margin-top: 0; }
-
 .notice {
   display: flex;
-  gap: 0.45rem;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--rule-grey);
-  border-left-width: 3px;
-  font-size: 0.78rem;
-  line-height: 1.5;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  border-left: 3px solid var(--border);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--surface);
+  font-size: 0.9375rem;
 }
 
 .notice__icon {
   flex: none;
+  width: 1rem;
+  text-align: center;
   font-weight: 700;
-  line-height: 1.5;
 }
 
-.notice--ok    { background: var(--success-dim); border-color: #c4dfcb; border-left-color: var(--success); color: var(--success); }
-.notice--info  { background: var(--blue-dim);    border-color: #c6d8ea; border-left-color: var(--blue);    color: var(--blue-dark); }
-.notice--warn  { background: var(--warning-dim); border-color: #e6d2ad; border-left-color: var(--warning); color: var(--warning); }
-.notice--error { background: var(--error-dim);   border-color: #e7bfc5; border-left-color: var(--error);   color: var(--error); }
+.notice--ok    { background: var(--success-dim); border-left-color: var(--success); color: var(--success); }
+.notice--info  { background: var(--accent-dim);  border-left-color: var(--accent);  color: var(--accent-dark); }
+.notice--warn  { background: var(--warning-dim); border-left-color: var(--warning); color: var(--warning); }
+.notice--error { background: var(--error-dim);   border-left-color: var(--error);   color: var(--error); }
 
 /* =====================================================================
  *  Listings read — the per-row review table
@@ -673,96 +567,84 @@ body {
 
 .review-scroll {
   overflow-x: auto;
-  border: 1px solid var(--rule-grey);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .review-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
 }
 
 .review-table th {
   position: sticky;
   top: 0;
-  background: var(--band);
-  border-bottom: 1px solid var(--ink);
-  padding: 0.3rem 0.45rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 0.65rem;
   text-align: left;
-  font-weight: 700;
-  color: var(--ink);
+  font-weight: 600;
+  color: var(--text-soft);
   white-space: nowrap;
 }
 
 .review-table td {
-  padding: 0.22rem 0.45rem;
-  border-bottom: 1px solid #e6e6e6;
-  color: var(--ink);
+  padding: 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
   white-space: nowrap;
 }
 
 .review-table tr:last-child td { border-bottom: none; }
-.review-table tr.is-omitted td { color: var(--ink-faint); text-decoration: line-through; }
-.review-table tr.is-edited     { background: var(--blue-dim); }
+.review-table tr.is-omitted td { color: var(--text-faint); text-decoration: line-through; }
+.review-table tr.is-edited     { background: var(--accent-dim); }
 .review-table tr.is-unread     { background: var(--error-dim); }
 
-.review-table .num { font-family: var(--font-mono); text-align: right; }
-.review-table .dim { color: var(--ink-faint); }
+.review-table .num { font-variant-numeric: tabular-nums; text-align: right; }
+.review-table .dim { color: var(--text-faint); }
 
 .review-swatch {
   display: block;
-  border: 1px solid var(--rule-grey);
+  border: 1px solid var(--border);
   image-rendering: pixelated;
 }
 
 .bucket-pill {
   display: inline-block;
-  padding: 0 0.35rem;
-  border: 1px solid var(--rule-grey);
-  border-radius: var(--radius-sm);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
   white-space: nowrap;
+  background: var(--surface-hover);
+  color: var(--text-soft);
 }
 
-.bucket-pill--active   { background: var(--paper);            color: var(--blue);   border-color: #bcd0e5; }
-.bucket-pill--pending  { background: var(--blue-dim);         color: var(--blue);   border-color: #bcd0e5; }
-.bucket-pill--closed   { background: #dce8f4;                 color: var(--blue-dark); border-color: #b0c8e0; }
-.bucket-pill--excluded { background: var(--bucket-excluded-dim); color: var(--ink-muted); }
-.bucket-pill--unread   { background: var(--error-dim);        color: var(--error);  border-color: #e7bfc5; }
+.bucket-pill--active   { background: #e6f0fd; color: #0847a6; }
+.bucket-pill--pending  { background: #fff4db; color: #7a4f00; }
+.bucket-pill--closed   { background: #e7f5ea; color: #16692e; }
+.bucket-pill--excluded { background: var(--surface-hover); color: var(--text-muted); }
+.bucket-pill--unread   { background: var(--error-dim); color: var(--error); }
 
 /* ===== Inline editable fields ===== */
 .field {
   font-family: inherit;
-  font-size: 0.75rem;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-grey);
-  border-radius: var(--radius-sm);
-  padding: 0.12rem 0.3rem;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
 }
 
-.field:focus { outline: none; border-color: var(--blue); }
+.field:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 .field.is-invalid { border-color: var(--error); background: var(--error-dim); }
 
 .field--mono   { font-family: var(--font-mono); }
-.field--price  { width: 6.4em; text-align: right; }
-.field--status { min-width: 5.4em; }
-.field--days   { width: 4.2em; text-align: right; }
-
-.linkish {
-  border: none;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: var(--blue);
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.linkish:hover { color: var(--blue-dark); }
+.field--price  { width: 7em; text-align: right; font-variant-numeric: tabular-nums; }
+.field--status { min-width: 5.8em; }
+.field--days   { width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* =====================================================================
  *  Status mapping
@@ -770,245 +652,189 @@ body {
 
 .mapping-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 0.3rem 1.2rem;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0 1.5rem;
 }
 
 .mapping-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.22rem 0.3rem;
-  border-bottom: 1px solid var(--rule);
+  gap: 0.6rem;
+  padding: 0.45rem 0.4rem;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 0.9375rem;
 }
 
-/* A code this screenshot actually contains. Bold-faced rather than tinted —
- * the page has one accent and it belongs to values. */
-.mapping-row.is-present { background: #f5f8fc; }
-.mapping-row.is-present .mapping-row__code { color: var(--blue); }
+.mapping-row.is-present { background: var(--accent-dim); }
+.mapping-row.is-present .mapping-row__code { color: var(--accent-dark); }
 
 .mapping-row__code {
   font-family: var(--font-mono);
-  font-weight: 700;
-  min-width: 4.2em;
-  color: var(--ink);
+  font-weight: 600;
+  min-width: 4.5em;
 }
 
 .mapping-row__meta {
   flex: 1;
-  font-size: 0.7rem;
-  color: var(--ink-muted);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
 }
 
 .mapping-row__count {
-  font-size: 0.7rem;
-  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  color: var(--text-soft);
 }
 
-/* ===== Notes under a heading ===== */
-.section-note {
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--ink-soft);
-  margin-bottom: 0.7rem;
-}
-
-.section-note code {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  background: #f2f2f2;
-  border: 1px solid #e4e4e4;
-  border-radius: var(--radius-sm);
-  padding: 0 0.2rem;
-}
-
-/* ===== Columns used ===== */
-.column-map { display: grid; gap: 0; margin-bottom: 0.85rem; }
+/* ===== Column map ===== */
+.column-map { display: grid; margin-bottom: 1rem; }
 
 .column-map__row {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.22rem 0.3rem;
-  border-bottom: 1px solid var(--rule);
-  font-size: 0.78rem;
+  gap: 0.6rem;
+  padding: 0.4rem 0.2rem;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 0.9375rem;
 }
 
-.column-map__role { min-width: 9em; font-weight: 700; color: var(--ink); }
-.column-map__how  { font-size: 0.7rem; color: var(--ink-muted); }
-
-/* ===== Output format tabs ===== */
-.tab-row {
-  display: flex;
-  gap: 0;
-  margin-bottom: 0;
-  border-bottom: 1px solid var(--ink);
-}
-
-.tab {
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--ink-soft);
-  background: var(--band);
-  border: 1px solid var(--band-line);
-  border-bottom: none;
-  padding: 0.22rem 0.7rem;
-  margin-right: 2px;
-  cursor: pointer;
-}
-
-.tab:hover { color: var(--ink); background: #dedede; }
-
-.tab.is-active {
-  background: var(--paper);
-  color: var(--ink);
-  border-color: var(--ink);
-  border-bottom: 1px solid var(--paper);
-  margin-bottom: -1px;
-}
+.column-map__role { min-width: 9em; font-weight: 600; }
+.column-map__how  { font-size: 0.8125rem; color: var(--text-muted); }
 
 /* =====================================================================
- *  Recognition detail
- *
- *  A diagnostic panel, not part of the form — so it stays plain and stays
- *  monospaced, and its one job is to be legible next to the screenshot it
- *  is describing.
+ *  Collapsible sections and recognition detail
  * ===================================================================== */
 
 .debug-toggle {
   cursor: pointer;
-  justify-content: flex-start;
+  user-select: none;
 }
 
-.debug-toggle:hover { background: #dedede; }
+.debug-toggle:hover { color: var(--accent); }
 
 .debug-chevron {
   margin-left: auto;
-  transition: transform var(--transition);
+  color: var(--text-muted);
 }
 
-.debug-body { margin-top: 0.75rem; }
+.debug-body { margin-top: 0.25rem; }
 
 #debug-canvas {
   display: block;
   width: 100%;
-  border: 1px solid var(--rule-grey);
-  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
   margin-bottom: 1rem;
 }
 
 .debug-perf {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  line-height: 1.55;
-  color: var(--ink-soft);
-  background: #f7f7f7;
-  border: 1px solid var(--rule-grey);
-  padding: 0.45rem 0.6rem;
-  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1rem;
 }
 
 .debug-row {
-  margin-bottom: 0.6rem;
-  border: 1px solid var(--rule-grey);
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
-.debug-row--accepted { border-color: #c4dfcb; }
-.debug-row--rejected { border-color: #e7bfc5; }
+.debug-row--accepted { border-color: #b7dcc1; }
+.debug-row--rejected { border-color: #f1c1bc; }
 
 .debug-row__header {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  padding: 0.35rem 0.6rem;
-  background: #f2f2f2;
+  font-size: 0.8125rem;
+  padding: 0.45rem 0.7rem;
+  background: var(--surface);
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
 .debug-row--accepted .debug-row__header { background: var(--success-dim); }
 
 .debug-tag {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-  border: 1px solid var(--rule-grey);
-  border-radius: var(--radius-sm);
-  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 0.3rem;
 }
 
 .debug-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.7rem;
+  font-size: 0.8125rem;
 }
 
 .debug-table th {
-  background: var(--band);
-  border-bottom: 1px solid var(--rule-grey);
-  padding: 0.22rem 0.4rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
   text-align: left;
-  font-weight: 700;
-  color: var(--ink);
+  font-weight: 600;
 }
 
 .debug-table td {
-  padding: 0.18rem 0.4rem;
-  border-bottom: 1px solid #eee;
-  color: var(--ink-soft);
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-soft);
 }
 
-.debug-table__row--rejected td { color: var(--ink-faint); }
+.debug-table__row--rejected td { color: var(--text-faint); }
 
 .debug-glyph {
   display: block;
-  border: 1px solid var(--rule-grey);
-  background: var(--paper);
+  border: 1px solid var(--border);
+  background: var(--bg);
   image-rendering: pixelated;
 }
 
 .debug-digit {
   font-family: var(--font-mono);
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .debug-score--high { color: var(--success); }
 .debug-score--med  { color: var(--warning); }
 .debug-score--low  { color: var(--error); }
 
-.debug-status--ok  { color: var(--success); font-weight: 700; }
-.debug-status--bad { color: var(--error); font-size: 0.65rem; }
+.debug-status--ok  { color: var(--success); font-weight: 600; }
+.debug-status--bad { color: var(--error); font-size: 0.75rem; }
 
 .debug-cluster {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   margin: 0 0.5rem 0.5rem 0;
-  padding: 0.3rem 0.45rem;
-  border: 1px solid var(--rule-grey);
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  color: var(--text-soft);
 }
 
 .debug-cluster canvas {
-  border: 1px solid var(--rule-grey);
-  background: var(--paper);
+  border: 1px solid var(--border);
+  background: var(--bg);
   image-rendering: pixelated;
 }
 
-@media (max-width: 480px) {
-  .app-container { padding: 0.9rem 0.7rem 1.6rem; }
-  .doc-title { flex-direction: column; gap: 0.2rem; }
-  .doc-title__meta { text-align: left; }
-  .doc-band > span { min-width: 8rem; }
-  .uad-field { grid-template-columns: minmax(0, 1fr) 7rem; }
+@media (max-width: 600px) {
+  .app-container { padding: 1.5rem 1rem 2rem; }
+  .app-title { font-size: 1.5rem; }
   .action-row .btn { width: 100%; }
 }
