@@ -135,6 +135,10 @@ body {
   margin-bottom: 1.15rem;
 }
 
+/* The head explains the page to someone who has not used it yet. Once there
+ * are results it is only in the way of them. */
+.has-results > .app-header { display: none; }
+
 /* Title line: the report name left, what this page is right. */
 .doc-title {
   display: flex;
@@ -365,23 +369,6 @@ body {
   background: var(--success-dim);
   color: var(--success);
 }
-
-/* ===== Output box ===== */
-.output-box {
-  width: 100%;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.55;
-  color: var(--ink);
-  background: #fbfbfb;
-  border: 1px solid var(--rule-grey);
-  border-radius: var(--radius-sm);
-  padding: 0.6rem 0.7rem;
-  resize: vertical;
-}
-
-.output-box:focus { outline: none; border-color: var(--blue); }
-.output-box::placeholder { color: var(--ink-faint); }
 
 /* ===== Status line ===== */
 .status {
@@ -627,105 +614,6 @@ body {
 }
 
 /* =====================================================================
- *  Market summary
- * ===================================================================== */
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0 2.5rem;
-  /* Each block is as tall as its own content. Only the closed block carries
-   * the ratio lines, and stretching the other two to match leaves two large
-   * empty panels that read as missing content rather than as absent data. */
-  align-items: start;
-}
-
-@media (max-width: 720px) {
-  .summary-grid { grid-template-columns: 1fr; }
-}
-
-.stat-card {
-  border-top: 1px solid var(--rule-strong);
-  border-bottom: 1px solid var(--rule-strong);
-  padding: 0 0 0.35rem;
-  margin-bottom: 0.9rem;
-  background: none;
-}
-
-.stat-card__label {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--ink);
-  padding: 0.22rem 0.3rem 0.22rem 0;
-  border-bottom: 1px solid var(--rule);
-}
-
-.stat-card__count {
-  display: flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  padding: 0.3rem 0.3rem 0.3rem 0.85rem;
-  border-bottom: 1px solid var(--rule);
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--blue);
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-card__count-unit {
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--ink-muted);
-}
-
-.stat-card__stats {
-  padding-top: 0.1rem;
-}
-
-.stat-line {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 8rem;
-  gap: 0.5rem;
-  padding: 0.16rem 0.3rem 0.16rem 0.85rem;
-  border-bottom: 1px solid var(--rule);
-  font-size: 0.78rem;
-}
-
-.stat-line__key {
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.stat-line__val {
-  color: var(--blue);
-  font-variant-numeric: tabular-nums;
-}
-
-/* The median is the figure the form asks for, so it is the one in bold blue. */
-.stat-line--median .stat-line__key { color: var(--ink); }
-.stat-line--median .stat-line__val { font-weight: 700; }
-
-.stat-card__note,
-.stat-card__empty {
-  padding: 0.25rem 0.3rem 0.1rem 0.85rem;
-  font-size: 0.68rem;
-  line-height: 1.45;
-  color: var(--ink-muted);
-}
-
-.stat-card__note--quiet { color: var(--ink-muted); }
-
-.stat-card__subhead {
-  padding: 0.4rem 0.3rem 0.18rem 0.85rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--ink);
-  border-bottom: 1px solid var(--rule);
-}
-
-.stat-card__stats--tight .stat-line { padding-top: 0.12rem; padding-bottom: 0.12rem; }
-
-/* =====================================================================
  *  Notices
  * ===================================================================== */
 
@@ -734,6 +622,12 @@ body {
   gap: 0.3rem;
   margin-bottom: 0.9rem;
 }
+
+#notice-card .notice-list { margin-bottom: 0; }
+
+/* A hidden notice card is still the fields' previous sibling, so without this
+ * the fields would open the page a section-gap below the top edge. */
+.has-results > #notice-card.hidden + #uad-card { margin-top: 0; }
 
 .notice {
   display: flex;
@@ -926,37 +820,6 @@ body {
 
 .column-map__role { min-width: 9em; font-weight: 700; color: var(--ink); }
 .column-map__how  { font-size: 0.7rem; color: var(--ink-muted); }
-
-/* ===== Output format tabs ===== */
-.tab-row {
-  display: flex;
-  gap: 0;
-  margin-bottom: 0;
-  border-bottom: 1px solid var(--ink);
-}
-
-.tab {
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--ink-soft);
-  background: var(--band);
-  border: 1px solid var(--band-line);
-  border-bottom: none;
-  padding: 0.22rem 0.7rem;
-  margin-right: 2px;
-  cursor: pointer;
-}
-
-.tab:hover { color: var(--ink); background: #dedede; }
-
-.tab.is-active {
-  background: var(--paper);
-  color: var(--ink);
-  border-color: var(--ink);
-  border-bottom: 1px solid var(--paper);
-  margin-bottom: -1px;
-}
 
 /* =====================================================================
  *  Recognition detail

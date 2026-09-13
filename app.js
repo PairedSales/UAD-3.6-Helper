@@ -1,8 +1,8 @@
 /* ===== UAD 3.6 Helper — UI ============================================ */
 /* Paste a connectMLS grid, read it once, then let the appraiser correct     */
-/* anything the recognizer got wrong. Every correction recomputes the three  */
-/* summary cards immediately, so the numbers on screen always match the      */
-/* table below them.                                                         */
+/* anything the recognizer got wrong. Every correction recomputes the form   */
+/* fields immediately, so the numbers on screen always match the table       */
+/* below them.                                                               */
 /*                                                                          */
 /* Copying is gated on the reading being complete: if rows could not be      */
 /* read, the summary is marked provisional and the copy buttons stay off     */
@@ -19,9 +19,6 @@ const previewImg   = $('#preview-img');
 const previewFile  = $('#preview-file');
 const clearBtn     = $('#clear-btn');
 const extractBtn   = $('#extract-btn');
-const outputBox    = $('#output-box');
-const copyBtn      = $('#copy-btn');
-const copyNote     = $('#copy-note');
 const statusArea   = $('#status-area');
 const progressWrap = $('#progress-container');
 const progressFill = $('#progress-fill');
@@ -33,9 +30,9 @@ const uadGrid      = $('#uad-grid');
 const uadProvisional = $('#uad-provisional');
 const uadCopyAll   = $('#uad-copy-all');
 const uadLive      = $('#uad-live');
-const summaryCard  = $('#summary-card');
-const summaryGrid  = $('#summary-grid');
+const noticeCard   = $('#notice-card');
 const noticeList   = $('#notice-list');
+const noteList     = $('#note-list');
 const columnsCard  = $('#columns-card');
 const columnsNote  = $('#columns-note');
 const columnMap    = $('#column-map');
@@ -56,7 +53,6 @@ let currentInput = null;
 let lastResult = null;      /* raw pipeline output */
 let rows = [];              /* editable working copy */
 let statusMapping = defaultStatusMapping();
-let outputFormat = 'uad';
 let lastReport = null;
 /* Bumped on every new image. A run whose token is stale writes nothing: two
  * pastes in quick succession otherwise leave the slower image's numbers on
@@ -128,30 +124,9 @@ for (const id of ['debug-toggle', 'mapping-toggle']) {
   });
 }
 
-for (const tab of document.querySelectorAll('.tab[data-format]')) {
-  tab.addEventListener('click', () => {
-    outputFormat = tab.dataset.format;
-    for (const t of document.querySelectorAll('.tab[data-format]')) {
-      t.classList.toggle('is-active', t === tab);
-    }
-    renderOutput();
-  });
-}
-
 $('#mapping-reset').addEventListener('click', () => {
   statusMapping = defaultStatusMapping();
   recompute();
-});
-
-copyBtn.addEventListener('click', async () => {
-  if (copyBtn.disabled) return;
-  const ok = await copyToClipboard(outputBox.value);
-  copyBtn.classList.toggle('copied', ok);
-  copyBtn.innerHTML = ok ? '<span>✅</span> Copied' : '<span>⚠️</span> Copy failed';
-  setTimeout(() => {
-    copyBtn.classList.remove('copied');
-    copyBtn.innerHTML = '<span>📋</span> Copy to Clipboard';
-  }, 1600);
 });
 
 uadCopyAll.addEventListener('click', async () => {
@@ -256,13 +231,20 @@ function resetResults() {
   lastResult = null;
   lastReport = null;
   rows = [];
-  for (const card of [uadCard, summaryCard, columnsCard, mappingCard, reviewCard, debugCard]) {
+  for (const card of [noticeCard, uadCard, columnsCard, mappingCard, reviewCard, debugCard]) {
     card.classList.add('hidden');
   }
+  showingResults(false);
   uadGrid.innerHTML = '';
   uadCopyAll.disabled = true;
-  outputBox.value = '';
-  copyBtn.disabled = true;
+}
+
+/**
+ * The page head and its explainer are for someone who has not pasted anything
+ * yet. Once there are numbers, the numbers are the page.
+ */
+function showingResults(on) {
+  appContainer.classList.toggle('has-results', on);
 }
 
 function resetState() {
@@ -289,15 +271,16 @@ function resetState() {
  * are adjacency-based — correct in both arrangements.
  */
 function placeInputCard(where) {
-  const anchor = where === 'bottom' ? appFooter : uadCard;
+  const anchor = where === 'bottom' ? appFooter : noticeCard;
   if (inputCard.nextElementSibling !== anchor) appContainer.insertBefore(inputCard, anchor);
 }
 
 /** Bring the results into view if the reorder left them off screen. */
 function revealSummary() {
-  const box = uadCard.getBoundingClientRect();
+  const top = noticeCard.classList.contains('hidden') ? uadCard : noticeCard;
+  const box = top.getBoundingClientRect();
   if (box.top >= 0 && box.top < window.innerHeight * 0.5) return;
-  uadCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  top.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* ================================================================== */
@@ -357,11 +340,9 @@ async function runAnalysis() {
       },
     }));
 
-    summaryCard.classList.remove('hidden');
     if (result.failed || rows.length === 0) {
       placeInputCard('top');
       renderNotices(result.warnings || []);
-      summaryGrid.innerHTML = '';
       showStatus(`No listings could be read from this ${input.kind === 'table' ? 'file' : 'image'}.`,
         'error');
       setProgress(100, 'Done');
@@ -371,6 +352,7 @@ async function runAnalysis() {
     for (const card of [uadCard, columnsCard, mappingCard, reviewCard, debugCard]) {
       card.classList.remove('hidden');
     }
+    showingResults(true);
     placeInputCard('bottom');
     revealSummary();
 
@@ -440,32 +422,8 @@ function recompute() {
   lastReport = buildReport(rows, statusMapping, lastResult && lastResult.review);
   renderNotices((lastResult && lastResult.warnings) || []);
   renderUad(lastReport);
-  renderSummary(lastReport);
   renderMapping(lastReport);
   renderReview(lastReport);
-  renderOutput();
-  gateCopy(lastReport);
-}
-
-/**
- * Copying is only enabled once the reading is complete.
- *
- * A provisional summary in the clipboard is a provisional summary in the
- * report, with nothing in the pasted text to say so.
- */
-function gateCopy(report) {
-  const blocked = report.provisional;
-  copyBtn.disabled = blocked;
-  if (!copyNote) return;
-  if (blocked) {
-    copyNote.textContent =
-      'Copying is off until this reading is complete: ' +
-      report.provisionalReasons.join('; ') +
-      '. Resolve them below, or select the text above by hand — it carries the same caveats.';
-    copyNote.classList.remove('hidden');
-  } else {
-    copyNote.classList.add('hidden');
-  }
 }
 
 /* ================================================================== */
@@ -476,6 +434,7 @@ const NOTICE_ICON = { ok: '✓', info: 'i', warn: '!', error: '✕' };
 
 function renderNotices(warnings) {
   noticeList.innerHTML = '';
+  noteList.innerHTML = '';
   const all = warnings.slice();
 
   if (lastReport && !lastReport.balanced) {
@@ -496,132 +455,18 @@ function renderNotices(warnings) {
   const order = { error: 0, warn: 1, info: 2, ok: 3 };
   all.sort((a, b) => (order[a.level] ?? 9) - (order[b.level] ?? 9));
 
+  /* Only what bears on the numbers sits above the fields. The rest — a column
+   * the file lacks, a code that carries a flag, the tick for a clean row count —
+   * waits under Recognition Detail, there to check without standing between
+   * the appraiser and the figures. */
   for (const w of all) {
     const el = document.createElement('div');
     el.className = `notice notice--${w.level}`;
     el.innerHTML = `<span class="notice__icon">${NOTICE_ICON[w.level] || 'i'}</span><span></span>`;
     el.lastElementChild.textContent = w.text;
-    noticeList.appendChild(el);
+    (w.level === 'error' || w.level === 'warn' ? noticeList : noteList).appendChild(el);
   }
-}
-
-function renderSummary(report) {
-  summaryGrid.innerHTML = '';
-
-  for (const id of REPORTED_BUCKETS) {
-    const meta = BUCKETS.find(b => b.id === id);
-    const s = report.summary[id];
-    const card = document.createElement('div');
-    card.className = `stat-card stat-card--${id}`;
-
-    const unit = id === 'active' ? (s.count === 1 ? 'listing' : 'listings')
-                                 : (s.count === 1 ? 'sale' : 'sales');
-
-    let html =
-      `<div class="stat-card__label">${meta.label}</div>` +
-      `<div class="stat-card__count">${s.count}` +
-      `<span class="stat-card__count-unit">${unit}</span></div>`;
-
-    if (s.priced > 0) {
-      const source = BUCKET_PRICE_SOURCE[id] === 'sold' ? 'sold price' : 'list price';
-      html +=
-        `<div class="stat-card__stats">` +
-          statLine('Low', formatPrice(s.low)) +
-          statLine('High', formatPrice(s.high)) +
-          statLine('Median', formatPrice(s.median), true) +
-        `</div>` +
-        `<div class="stat-card__empty">by ${source}</div>`;
-
-      html += marketTimeMarkup(s, id);
-
-      if (s.ratio) {
-        html +=
-          `<div class="stat-card__subhead" ` +
-          `title="(sold price − concessions) ÷ original list price">Sale / list ratio</div>` +
-          `<div class="stat-card__stats stat-card__stats--tight">` +
-            statLine('Low', formatRatio(s.ratio.low)) +
-            statLine('High', formatRatio(s.ratio.high)) +
-            statLine('Median', formatRatio(s.ratio.median), true) +
-          `</div>` +
-          `<div class="stat-card__empty">net of concessions, against original list` +
-          (s.ratio.missing ? ` · ${s.ratio.count} of ${s.count} rows` : '') + `</div>` +
-          compListMarkup(s);
-      }
-
-      if (s.missing > 0) {
-        html += `<div class="stat-card__note">${s.missing} row(s) had no readable price. ` +
-                `They are counted but not priced.</div>`;
-      }
-    } else if (s.count > 0) {
-      html += `<div class="stat-card__note">No prices could be read for these rows.</div>` +
-              marketTimeMarkup(s, id);
-    } else {
-      html += `<div class="stat-card__empty">None in this search.</div>`;
-    }
-
-    card.innerHTML = html;
-    summaryGrid.appendChild(card);
-  }
-}
-
-/**
- * Market time, per bucket.
- *
- * Shown on every bucket, not only the active one, because the form's box is
- * not the only reason to want it: the closed sales' median market time is what
- * an appraiser compares the active listings' against to say whether the market
- * is speeding up. Only the ACTIVE figure feeds the form field — see uadFields()
- * in stats.js for why.
- */
-function marketTimeMarkup(s, id) {
-  if (!s.count) return '';
-  if (!s.marketTime) {
-    return `<div class="stat-card__note stat-card__note--quiet">` +
-           `No market time was read for these rows.</div>`;
-  }
-  const mt = s.marketTime;
-  const which = id === 'active' ? 'days on market' : 'days marketed';
-  return `<div class="stat-card__subhead" title="From the MT column">Market time</div>` +
-    `<div class="stat-card__stats stat-card__stats--tight">` +
-      statLine('Low', formatDays(mt.low)) +
-      statLine('High', formatDays(mt.high)) +
-      statLine('Median', formatDays(mt.median), true) +
-    `</div>` +
-    `<div class="stat-card__empty">median ${which}` +
-    (mt.missing ? ` · ${mt.count} of ${s.count} rows` : '') + `</div>`;
-}
-
-/**
- * The individual sale-to-list ratios, comp by comp.
- *
- * Shown only for a small closed-sale set — see compLines() in stats.js for why
- * ten is the line. Every closed sale gets a row, including one with no ratio: a
- * comp missing from a numbered list would read as a comp that did not exist.
- */
-function compListMarkup(s) {
-  if (!s.ratio || !s.count || s.count > CFG.COMP_LIST_MAX) return '';
-
-  const rows = s.items.map(item => {
-    const value = item.ratio === null
-      ? '<span class="dim">—</span>'
-      : formatRatio(item.ratio);
-    const title = item.ratio === null
-      ? 'No original list price for this sale'
-      : `${formatPrice(item.price)} net of concessions, against the original list price` +
-        (item.mls ? ` · MLS ${item.mls}` : '');
-    return `<div class="stat-line" title="${title}">` +
-           `<span class="stat-line__key">Comp ${item.n}</span>` +
-           `<span class="stat-line__val">${value}</span></div>`;
-  }).join('');
-
-  return `<div class="stat-card__subhead">Each sale</div>` +
-         `<div class="stat-card__stats stat-card__stats--tight">${rows}</div>`;
-}
-
-function statLine(key, val, emphasize) {
-  return `<div class="stat-line${emphasize ? ' stat-line--median' : ''}">` +
-         `<span class="stat-line__key">${key}</span>` +
-         `<span class="stat-line__val">${val}</span></div>`;
+  noticeCard.classList.toggle('hidden', !noticeList.childElementCount);
 }
 
 function renderColumns(result) {
@@ -1072,14 +917,6 @@ function fieldValue(v) {
   return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
-function renderOutput() {
-  if (!lastReport) return;
-  if (outputFormat === 'tsv') outputBox.value = reportAsTsv(lastReport);
-  else if (outputFormat === 'rows') outputBox.value = allRowsAsTsv(lastReport);
-  else if (outputFormat === 'text') outputBox.value = reportAsText(lastReport);
-  else outputBox.value = uadFieldsAsText(lastReport);
-}
-
 function allRowsAsTsv(report) {
   const lines = ['#\tMLS #\tStatus\tCategory\tOrig List\tList Price\tSold Price\tConcessions\t' +
                  'MT\tCounted\tSale/List'];
@@ -1112,9 +949,8 @@ function allRowsAsTsv(report) {
 /**
  * The form's own fields, laid out the way the form lays them out.
  *
- * The three summary cards below answer "what does this market look like"; this
- * panel answers the narrower question the appraiser is actually sitting in
- * front of — what goes in each box. So it copies ONE field at a time, and what
+ * The panel answers the question the appraiser is actually sitting in front
+ * of — what goes in each box. So it copies ONE field at a time, and what
  * it copies is the bare number that field takes: the form draws the "$" outside
  * the input and groups the digits itself, and a numeric field that rejects
  * "189,900" while accepting "189900" is far commoner than the reverse.
@@ -1139,10 +975,8 @@ function renderUad(report) {
   columns.right.className = 'uad-column';
   uadGrid.append(columns.left, columns.right);
 
-  /* Per-field copy is off while the reading is provisional, for the reason the
-   * whole-report copy is: a bare number has nowhere to carry the caveat. The
-   * text block in the panel below still carries it, and is still selectable by
-   * hand — a caveat you can read is the point, not an obstacle course. */
+  /* Per-field copy is off while the reading is provisional: a bare number has
+   * nowhere to carry the caveat. */
   const blocked = report.provisional;
 
   for (const g of UAD_GROUPS) {
@@ -1250,12 +1084,19 @@ async function copyToClipboard(text) {
     await navigator.clipboard.writeText(text);
     return true;
   } catch (err) {
+    const box = document.createElement('textarea');
+    box.value = text;
+    box.setAttribute('readonly', '');
+    box.style.position = 'fixed';
+    box.style.opacity = '0';
+    document.body.appendChild(box);
     try {
-      outputBox.select();
-      document.execCommand('copy');
-      return true;
+      box.select();
+      return document.execCommand('copy');
     } catch (e) {
       return false;
+    } finally {
+      box.remove();
     }
   }
 }

@@ -107,7 +107,7 @@ Days on market for each bucket comes from the **MT** column of the same rows.
 
 `ACTV`, `PCHG`, `TEMP`, `FIN`, `PEND` and `CLSD` are mapped as specified;
 the rest follow MRED Rules & Regulations §2.5 and standard appraisal practice.
-**Every mapping is editable in the app**, and the cards recalculate as you
+**Every mapping is editable in the app**, and the fields recalculate as you
 change it.
 
 `TEMP` counts as an **active listing**: the listing agreement is in force, it is
@@ -122,9 +122,9 @@ for an even one, rounded to the dollar. An empty set reports `—`, never `$0`.
 **Median days on market** comes from the **MT** (market time) column. The form
 prints that box inside its *Active Listings* group, between the count and the
 list prices, so the box carries the **active listings'** median — every other
-field in that group describes the active set. The pending and closed medians
-are read too and shown on their own cards, because what an appraiser compares
-the active market time against is how long the sold ones took.
+field in that group describes the active set. The closed sales' median is noted
+beside that field, because what an appraiser compares the active market time
+against is how long the sold ones took.
 
 **Sale-to-list ratio**: `(sold price − concessions) ÷ original list price`,
 shown to three decimals (`98.859%`). A blank CONC cell counts as no concessions,
@@ -159,7 +159,7 @@ The whole design principle is that a **wrong number is far worse than a missing
 one**. An appraiser can see a gap; they cannot see a plausible mistake.
 
 - A closed sale whose **Sold Pr** could not be read is still counted, but
-  contributes nothing to low/high/median, and the card says how many rows the
+  contributes nothing to low/high/median, and the field notes how many rows the
   prices actually rest on. Its asking price is never substituted.
 - A status that does not clear the recognizer's confidence bar is reported as
   unreadable, not filed under the nearest guess. A row whose Stat cell is blank
@@ -188,8 +188,7 @@ one**. An appraiser can see a gap; they cannot see a plausible mistake.
   MT cell is editable in the review table, so typing the two digits off the
   screenshot clears it.
 - The per-field copy buttons go off with everything else while a reading is
-  provisional. A bare number has nowhere to carry a caveat, and the text block
-  — which does carry one — stays selectable by hand.
+  provisional. A bare number has nowhere to carry a caveat.
 - If the grid numbers its rows, those numbers are read back as an independent
   check that nothing was dropped, and any gap is reported by row number.
 
