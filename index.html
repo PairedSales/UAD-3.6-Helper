@@ -45,8 +45,9 @@
         <input type="file" id="file-input"
                accept="image/png, image/jpeg, image/webp, .csv, .tsv, .txt, text/csv, text/tab-separated-values" />
         <div class="drop-zone__text">
-          <strong>Ctrl + V</strong> to paste a screenshot of your search results, or click to upload
-          one &mdash; or a <strong>.csv</strong> / <strong>.tsv</strong> export<br />
+          <strong>Ctrl + V</strong> to paste a screenshot of your search results, click to upload
+          one, or drop it &mdash; or a <strong>.csv</strong> / <strong>.tsv</strong> export &mdash;
+          anywhere on the page<br />
           <small>Include the header row and the Stat, MT, List Price, Orig List Pr, Sold Pr and CONC columns</small>
         </div>
       </div>
@@ -193,6 +194,11 @@ Copy to Clipboard
       </p>
     </footer>
 
+  </div>
+
+  <!-- Shown while a file is dragged over the page -->
+  <div class="drop-overlay" aria-hidden="true">
+    <div class="drop-overlay__box">Drop a screenshot or a .csv / .tsv export</div>
   </div>
 
   <!-- Load order matters only for top-level constants; functions are hoisted. -->

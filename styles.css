@@ -167,6 +167,35 @@ body {
   color: var(--text-muted);
 }
 
+/* While a file is dragged anywhere over the page. pointer-events: none keeps
+ * the overlay from becoming the drag target itself, which would reset the
+ * enter/leave count on every move. */
+.drop-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  padding: 1.5rem;
+  background: rgba(246, 248, 250, 0.85);
+  pointer-events: none;
+}
+
+.is-dragging .drop-overlay { display: flex; }
+
+.drop-overlay__box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: var(--accent-dim);
+  color: var(--accent-dark);
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .drop-zone input[type="file"] {
   position: absolute;
   inset: 0;
