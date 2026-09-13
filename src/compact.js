@@ -62,10 +62,7 @@ function readHeaderBand(surf) {
       /* Map each label back to a LOCATE column by horizontal overlap. */
       const roles = new Map();
       const taken = new Set();
-      const bound = new Set();
       for (const m of found.matches.slice().sort((a, b) => b.score - a.score)) {
-        /* One column per role we act on — see bindHeaderRoles. */
-        if (ACTED_HEADER_ROLES.includes(m.role) && bound.has(m.role)) continue;
         const sx0 = m.token.bbox.x / k, sx1 = (m.token.bbox.x + m.token.bbox.w) / k;
         let best = null;
         for (const col of surf.columns) {
@@ -75,9 +72,9 @@ function readHeaderBand(surf) {
           const d = Math.abs((col.x0 + col.x1) / 2 - (sx0 + sx1) / 2);
           if (!best || d < best.d) best = { col, d };
         }
-        if (best) { taken.add(best.col); bound.add(m.role); roles.set(best.col, m.role); }
+        if (best) { taken.add(best.col); roles.set(best.col, m.role); }
       }
-      return { rowIndex: i, row, roles, font: found.font, weight: found.weight, matches: found.matches };
+      return { rowIndex: i, row, roles, font: found.font, matches: found.matches };
     }
   }
   return null;
@@ -95,7 +92,11 @@ function buildBandSurface(grayCrop, k) {
 
 /** Match one row of a band surface against the known header labels. */
 function matchHeaderRow(band, row) {
-  const { base: labels, all: candidates } = headerCandidates();
+  const candidates = [];
+  for (const h of HEADER_LABELS) {
+    candidates.push(h.text);
+    if (ANCHOR_HEADER_ROLES.includes(h.role)) candidates.push(h.text + '▲', h.text + '▼');
+  }
 
   const tokens = extractTokens(band, row,
     Math.max(3 * band.scale, Math.round(band.glyphW * 1.35)));
@@ -104,20 +105,22 @@ function matchHeaderRow(band, row) {
   const rasters = tokens
     .map(t => rasterizeBox(band.gray, t.bbox.x, t.bbox.y, t.bbox.w, t.bbox.h))
     .filter(Boolean);
-  const { font, weight } = pickFont(rasters, labels, CFG.SYNTH_WEIGHTS);
+  const font = pickFont(rasters, candidates, 'bold').font;
 
   const matches = [];
   const seen = new Set();
   for (const t of tokens) {
-    const m = matchHeaderToken(band, t, candidates, font, weight);
+    const raster = rasterizeBox(band.gray, t.bbox.x, t.bbox.y, t.bbox.w, t.bbox.h);
+    const m = matchWord(raster, candidates, font, 'bold');
     if (!m || m.score < CFG.HEADER_MIN_WORD_SCORE) continue;
-    const base = headerLabelOf(m.text);
+    const base = m.text.replace(/[▲▼]$/, '');
     const entry = HEADER_LABELS.find(h => h.text === base);
-    const role = headerMatchRole(entry ? entry.role : 'text', m.score);
+    const role = entry ? entry.role : 'text';
     matches.push({ token: t, label: base, role, score: m.score });
+    seen.add(role);
   }
 
-  return { matches, font, weight, anchors: countHeaderAnchors(matches) };
+  return { matches, font, anchors: ANCHOR_HEADER_ROLES.filter(r => seen.has(r)).length };
 }
 
 /**
@@ -136,30 +139,14 @@ function columnsWorthReading(surf, header) {
   const mark = (col, reason) => { if (col) { keep.add(col); why.set(col, reason); } };
 
   /* The row-number column is always worth keeping: it is the only independent
-   * check that no listing was lost, and it is a dozen pixels wide.
-   *
-   * "One to three glyphs on every row" is also what a drag handle, a checkbox
-   * and a photo icon are, and Matrix puts all three at the left edge — so the
-   * leftmost such column used to be kept and the row numbers beside it were
-   * not. Worse, an icon is taller than text, and in the compacted surface its
-   * separate strokes break every row band into slivers. So a candidate's cells
-   * must be the height of TEXT, measured against the page's own tokens, and the
-   * first few candidates are kept rather than only the first. */
-  const heights = [];
-  for (const col of surf.columns) for (const t of col.cells.values()) heights.push(t.bbox.h);
-  heights.sort((a, b) => a - b);
-  const textH = heights.length ? heights[Math.floor(heights.length / 2)] : 0;
-  let indexCandidates = 0;
+   * check that no listing was lost, and it is a dozen pixels wide. */
   for (const col of surf.columns) {
-    if (indexCandidates >= CFG.INDEX_CANDIDATE_COLUMNS) break;
     const cells = Array.from(col.cells.values());
     if (cells.length < 3) continue;
-    if (cells.filter(t => t.tall.length >= 1 && t.tall.length <= 3).length / cells.length < 0.9) continue;
-    const hs = cells.map(t => t.bbox.h).sort((a, b) => a - b);
-    const h = hs[Math.floor(hs.length / 2)];
-    if (textH && (h > textH * 1.25 || h < textH * 0.6)) continue;
-    mark(col, 'index?');
-    indexCandidates++;
+    if (cells.filter(t => t.tall.length >= 1 && t.tall.length <= 3).length / cells.length >= 0.9) {
+      mark(col, 'index?');
+      break;                                   /* leftmost only */
+    }
   }
 
   /* 'mt' is in this list but not in the `decisive` test below: market time is
@@ -274,8 +261,9 @@ function buildCompactSurface(surf, keep) {
   const stripped = stripTableRules(getBinary(work), W, H);
   const bin = stripped.bin;
 
-  const bands = classifyBands(findRows(hProjection(bin, W, H), W, CFG.MIN_ROW_DENSITY), CFG.UPSCALE, H);
-  const { rawRows, rows } = bands;
+  const rawRows = findRows(hProjection(bin, W, H), W, CFG.MIN_ROW_DENSITY);
+  const minH = CFG.UPSCALE * 5, maxH = CFG.UPSCALE * 30;
+  const rows = rawRows.filter(r => r.h >= minH && r.h <= maxH);
 
   const compact = {
     src: surf.src,
@@ -286,7 +274,7 @@ function buildCompactSurface(surf, keep) {
     segments: merged.map(r => ({ dx: r.dx * k, w: (r.x1 - r.x0) * k, sx: r.x0 / surf.scale })),
     sourceScale: surf.scale,
     rows, rawRows,
-    droppedRows: bands.droppedRows,
+    droppedRows: rawRows.filter(r => r.h < minH || r.h > maxH),
     medH: medianRowHeight(rows),
     thr,
     shadedBands: surf.shadedBands,

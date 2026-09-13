@@ -18,22 +18,8 @@
  * A GAP in the sequence is the finding, not a reason to abandon the check —
  * "rows 31 and 32 are missing" is exactly what the user needs to hear.
  */
-function findIndexColumn(surf, cols, dataRows, bank, skipCol, altBank) {
+function findIndexColumn(surf, cols, dataRows, bank, skipCol) {
   let best = null;
-
-  /* One cell's digits against one bank; null when any glyph is not a clear digit. */
-  const readWith = (token, b) => {
-    let str = '', worst = 1;
-    for (const g of token.tall) {
-      const norm = normalizeGlyph(surf.gray, g.x, g.y, g.w, g.h);
-      norm.features = computeStructuralFeatures(norm.binary, CFG.NORM_W, CFG.NORM_H, norm.grayscale);
-      const cls = classifyGlyph(norm, b);
-      if (isAmbiguous(cls)) return null;
-      str += String(cls.digit);
-      worst = Math.min(worst, cls.score);
-    }
-    return (/^\d{1,4}$/.test(str) && worst >= CFG.MIN_DIGIT_SCORE) ? str : null;
-  };
 
   for (const col of cols) {
     /* The MT column is one to three digits on every row, which is the shape
@@ -48,8 +34,16 @@ function findIndexColumn(surf, cols, dataRows, bank, skipCol, altBank) {
     const seen = new Map();
     for (const [row, token] of col.cells) {
       if (token.tall.length < 1 || token.tall.length > 4) continue;
-      const str = readWith(token, bank) || (altBank ? readWith(token, altBank) : null);
-      if (!str) continue;
+      let str = '', worst = 1, bad = false;
+      for (const g of token.tall) {
+        const norm = normalizeGlyph(surf.gray, g.x, g.y, g.w, g.h);
+        norm.features = computeStructuralFeatures(norm.binary, CFG.NORM_W, CFG.NORM_H, norm.grayscale);
+        const cls = classifyGlyph(norm, bank);
+        if (isAmbiguous(cls)) { bad = true; break; }
+        str += String(cls.digit);
+        worst = Math.min(worst, cls.score);
+      }
+      if (bad || !/^\d{1,4}$/.test(str) || worst < CFG.MIN_DIGIT_SCORE) continue;
       seen.set(row, parseInt(str, 10));
     }
 
@@ -172,7 +166,7 @@ async function extractGrid(img, onProgress) {
   }
 
   step(22, 'Reading the header…');
-  const header = findHeaderRow(surf, headerBand && headerBand.font, headerBand && headerBand.weight);
+  const header = findHeaderRow(surf, headerBand && headerBand.font);
   if (!header) {
     warnings.push({
       level: 'warn',
@@ -219,7 +213,7 @@ async function extractGrid(img, onProgress) {
   let clusters = [];
   if (statusCol) {
     clusters = clusterStatusCells(surf, statusCol.cells);
-    statusByRow = labelStatusClusters(clusters, statusCol.font, surf, statusCol.vocab, statusCol.weight);
+    statusByRow = labelStatusClusters(clusters, statusCol.font, surf);
     const merged = mergeSameCodeClusters(clusters);
     clusters = merged.clusters;
     for (const c of merged.contradictions) {
@@ -233,12 +227,8 @@ async function extractGrid(img, onProgress) {
   } else {
     warnings.push({
       level: 'error',
-      text: 'No status column was found. Every listing needs a status ("Stat" in connectMLS, ' +
-            '"St" in Matrix) to be counted — make sure that column is inside the pasted ' +
-            'screenshot.' + (header ? '' :
-            ' A Matrix one-letter status is only read beneath its "St" header: a column of single ' +
-            'glyphs could equally be BR or # Garage, and at this size S looks like 5. Include the ' +
-            'header row.'),
+      text: 'No status column was found. Every listing needs a "Stat" value to be counted — ' +
+            'make sure the Stat column is inside the pasted screenshot.',
     });
   }
 
@@ -257,12 +247,8 @@ async function extractGrid(img, onProgress) {
     if (code && STATUS_BY_CODE[code] && STATUS_BY_CODE[code].bucket === 'closed') closedRows.add(row);
   }
 
-  /* One bank for every number on the grid — prices, concessions, market time,
-   * MLS and row numbers alike — chosen from the grid's own digits. */
-  const digits = chooseDigitBank(surf, cols, bank, uiFont);
-
   const { money, integers } =
-    scoreColumns(surf, dataRows, cols, digits.bank, digits.fallbackFont, closedRows, headerRoles);
+    scoreColumns(surf, dataRows, cols, bank, uiFont, closedRows, headerRoles);
   console.log(`[Grid] ${money.length} money column(s): ` + money.map(m =>
     `x=${m.col.x0}-${m.col.x1} filled ${(100 * m.fillFrac).toFixed(0)}% median ` +
     `$${m.median.toLocaleString('en-US')}`).join('; '));
@@ -276,36 +262,11 @@ async function extractGrid(img, onProgress) {
             `${(100 * roles.confidence).toFixed(0)}%). ${roles.notes.join(' ')}`,
     });
   }
-
-  /* Active and pending listings are priced on the CURRENT list price and on
-   * nothing else. A layout without one — Matrix displays commonly carry only
-   * "Orig Price" — leaves them unpriced, and says so here by name, because the
-   * price that IS on screen is the one it must not be mistaken for. */
-  let needsList = 0;
-  for (const row of dataRows) {
-    const st = statusByRow.get(row);
-    const code = st && st.code ? normalizeStatusCode(st.code) : null;
-    const bucket = code && STATUS_BY_CODE[code] ? STATUS_BY_CODE[code].bucket : null;
-    if (bucket === 'active' || bucket === 'pending') needsList++;
-  }
-  /* With no money column at all, roles.problems has already said so. */
-  if (!roles.list && needsList && money.length) {
-    warnings.push({
-      level: 'warn',
-      text: `No current list price column ("List Price") was found, so the ${needsList} active and ` +
-            `pending listing(s) have no price. ` +
-            (roles.orig
-              ? 'The original list price is on screen but is not used in its place — a listing ' +
-                'that has been reduced would be summarized at a price nobody is asking any more. '
-              : '') +
-            'Add the List Price column to the grid display and re-take the screenshot.',
-    });
-  }
   if (!roles.orig) {
     warnings.push({
       level: 'info',
-      text: 'No original list price column ("Orig List Pr" / "Orig Price") was found, so no ' +
-            'sale-to-list ratios could be computed. Include that column in the screenshot to get them.',
+      text: 'No "Orig List Pr" column was found, so no sale-to-list ratios could be computed. ' +
+            'Include that column in the screenshot to get them.',
     });
   }
   if (!roles.conc && roles.sold) {
@@ -316,8 +277,7 @@ async function extractGrid(img, onProgress) {
   }
 
   step(78, 'Reading market time…');
-  const marketTimeCol = readMarketTimeColumn(surf, dataRows, cols, digits.bank, digits.fallbackFont,
-    headerRoles);
+  const marketTimeCol = readMarketTimeColumn(surf, dataRows, cols, bank, uiFont, headerRoles);
   if (!marketTimeCol) {
     /* Two different causes, two different things to do about it — so they are
      * two different messages rather than one that fits neither. */
@@ -359,12 +319,9 @@ async function extractGrid(img, onProgress) {
   }
 
   step(80, 'Cross-checking…');
-  /* The same second pass the money columns get, when the reference bank is
-   * primary: a cell it refuses is tried once more in the grid's own font. */
-  const altBank = digits.fallbackFont ? fontAdaptedDigitBank(bank, digits.fallbackFont) : null;
-  const mlsCol = findMlsColumn(surf, cols, digits.bank, headerRoles, altBank);
-  const indexCol = findIndexColumn(surf, cols, dataRows, digits.bank,
-    marketTimeCol && marketTimeCol.col, altBank);
+  const mlsCol = findMlsColumn(surf, cols, bank);
+  const indexCol = findIndexColumn(surf, cols, dataRows, bank,
+    marketTimeCol && marketTimeCol.col);
 
   /* ---- Assemble the rows ---- */
   const rows = [];

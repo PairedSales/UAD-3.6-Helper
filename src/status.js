@@ -132,10 +132,6 @@ function scoreStatusColumn(surf, dataRows, col, headerRole, bank, font) {
   if (cells.length < 2) return null;
   if (bank && headerRole !== 'status' && columnIsNumeric(surf, col, bank)) return null;
 
-  /* Which codes this column can hold — MRED's or Matrix's one-letter set — is
-   * settled for the whole column from its glyph counts. See statusVocabularyFor. */
-  const vocab = statusVocabularyFor(cells, headerRole === 'status');
-
   /* Candidacy is judged on a sample; the winning column is read in full
    * afterwards. Scoring every cell of every column is what made a large grid
    * appear to hang. */
@@ -145,15 +141,9 @@ function scoreStatusColumn(surf, dataRows, col, headerRole, bank, font) {
     sample.push(cells[i]);
   }
 
-  /* The stroke weight, from this column's own cells. connectMLS prints its
-   * codes bold and Matrix prints its letters regular, and the header is no
-   * guide to it: the two are set independently. Decided once per column, on
-   * the same sample that judges its candidacy. */
-  const weight = pickWeight(sample.map(c => c.raster), vocab.tokens, font, CFG.SYNTH_WEIGHTS);
-
   let resolved = 0, scoreSum = 0;
   for (const cell of sample) {
-    const m = matchWord(cell.raster, vocab.tokens, font, weight);
+    const m = matchWord(cell.raster, RECOGNIZED_TOKENS, font, CFG.SYNTH_WEIGHT);
     cell.match = m;
     if (m && m.score >= CFG.STATUS_MIN_SCORE && m.shape >= CFG.STATUS_ABS_SHAPE &&
         m.margin >= requiredMargin(m.text, m.ranked[1] && m.ranked[1].text)) {
@@ -168,7 +158,7 @@ function scoreStatusColumn(surf, dataRows, col, headerRole, bank, font) {
   const headerBonus = headerRole === 'status' ? 0.5 : 0;
 
   return {
-    col, cells, font, weight, vocab, resolvedFrac, meanScore, coverage, headerBonus,
+    col, cells, font, resolvedFrac, meanScore, coverage, headerBonus,
     score: resolvedFrac * 0.5 + meanScore * 0.3 + coverage * 0.2 + headerBonus,
   };
 }
@@ -198,7 +188,7 @@ function findStatusColumn(surf, dataRows, cols, headerRoles, bank, uiFont) {
     if (!res) continue;
     if (res.headerBonus) headerNamed = res;
     if (res.resolvedFrac > 0 || res.headerBonus) {
-      console.log(`[Stat] col ${col.index} x=${col.x0}-${col.x1} (${res.vocab.id}, ${res.weight}): ` +
+      console.log(`[Stat] col ${col.index} x=${col.x0}-${col.x1}: ` +
         `resolved ${(100 * res.resolvedFrac).toFixed(0)}% mean ${res.meanScore.toFixed(2)} ` +
         `coverage ${(100 * res.coverage).toFixed(0)}%${res.headerBonus ? ' +header' : ''} ` +
         `→ ${res.score.toFixed(3)}`);
@@ -474,7 +464,6 @@ function readKickoutLetters(surf, cells, font) {
  */
 function applyKickoutRead(cl, font, surf) {
   if (!surf) return false;
-  /* Everything below is MRED's: the suffix, the alphabet and the rivals. */
   const len = cl.members[0].token.tall.length;
   if (len <= CFG.KICKOUT_LETTERS) return false;
   if (len - CFG.KICKOUT_LETTERS > CFG.KICKOUT_MAX_DIGITS) return false;
@@ -505,15 +494,12 @@ function applyKickoutRead(cl, font, surf) {
  * surfaced as unreadable so an appraiser can name them, rather than being
  * filed under whatever happened to score highest.
  */
-function labelStatusClusters(clusters, font, surf, vocab, weight) {
+function labelStatusClusters(clusters, font, surf) {
   const byRow = new Map();
-  const tokens = vocab ? vocab.tokens : RECOGNIZED_TOKENS;
-  const w = weight || CFG.SYNTH_WEIGHT;
-  const mred = !vocab || vocab.id === 'mred';
 
   for (const cl of clusters) {
     const matches = cl.members.map(cell =>
-      cell.match || (cell.match = matchWord(cell.raster, tokens, font, w)));
+      cell.match || (cell.match = matchWord(cell.raster, RECOGNIZED_TOKENS, font, CFG.SYNTH_WEIGHT)));
 
     const n = cl.members.length;
     const v = voteOnMatches(matches, n);
@@ -526,7 +512,7 @@ function labelStatusClusters(clusters, font, surf, vocab, weight) {
     cl.kickout = false;
 
     const whole = { code: cl.code, reject: cl.reject, second: v.second };
-    if (cl.reject && mred) applyKickoutRead(cl, font, surf);
+    if (cl.reject) applyKickoutRead(cl, font, surf);
 
     console.log(`[Stat] cluster ×${n} ${colorHex(cl.color)} → ${cl.code || 'UNREADABLE'} ` +
       (cl.kickout ? '(kick-out split) ' : '') +

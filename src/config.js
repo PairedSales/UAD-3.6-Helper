@@ -52,19 +52,6 @@ const CFG = {
   RULE_SPAN_SLACK_SRC: 2,
   RULE_MAX_THICK_SRC: 4,
 
-  /* Link underlines (see stripUnderlines in grid.js) — new, not MLS-Extract's */
-  UNDERLINE_MIN_GLYPHS: 5,      // A run this many glyph widths long is no stroke of a character.
-                                // Not 3: the tops of three adjacent bold 11px glyphs can join into
-                                // an 18px hairline, and erasing it shifted glyphW on a connectMLS
-                                // grid that has no underlines at all. An MLS number is 6+ digits.
-  UNDERLINE_MAX_THICK_SRC: 2,   // …and a hairline is at most this thick, in source px
-  UNDERLINE_MIN_THIN_FRAC: 0.6, // …across at least this much of its length
-
-  /* A band this short, this close to a row, is that row's descender or comma
-   * tail — see classifyBands in grid.js. Fractions of the median row height. */
-  FRAGMENT_MAX_ROW_FRAC: 0.25,
-  FRAGMENT_GAP_ROW_FRAC: 0.25,
-
   /* Segmentation */
   MIN_ROW_DENSITY: 0.012,
   MIN_DIGIT_W_SRC: 2,
@@ -87,8 +74,6 @@ const CFG = {
 
   /* Column banding (MLS-Extract parity) */
   MLS_DIGITS: 8,
-  MLS_MIN_DIGITS: 6,            // Other lengths, accepted only under an "MLS #" / "ML #" header
-  MLS_MAX_DIGITS: 10,
   COL_MIN_BANDS: 3,
   COL_GUTTER_RATIO: 0.5,
   COL_HLINE_RATIO: 0.5,
@@ -114,7 +99,6 @@ const CFG = {
    * things, so it runs at source resolution; MLS-Extract likewise treats its
    * full-page pass as a locator and re-analyzes the crop it settles on. */
   LOCATE_SCALE: 1,
-  INDEX_CANDIDATE_COLUMNS: 2,   // Leftmost text-height 1–3 glyph columns kept as possible row numbers
   COLUMN_PAD_SRC: 3,            // Source px kept around each column when cropping
   COLUMN_GAP_SRC: 12,           // Two source ranges closer than this are cropped as one
   /* The gutter DRAWN between the strips of the compacted surface, as a multiple
@@ -135,11 +119,6 @@ const CFG = {
    * any DPI or zoom level, where a constant does not. */
   TOKEN_GAP_GLYPHS: 1.15,       // Gap ending a token, as a multiple of glyph width
   GLYPH_SPLIT_RATIO: 1.45,      // Segment wider than this × glyph width is merged glyphs
-
-  /* --- Which digit bank reads first (see chooseDigitBank) --- */
-  BANK_SAMPLE_GLYPHS: 80,
-  BANK_SAMPLE_MIN: 12,
-  BANK_ADAPT_MIN_DISAGREE: 0.03,
 
   /* --- Reading numbers --- */
   PRICE_MIN_DIGITS: 3,
@@ -181,14 +160,6 @@ const CFG = {
                                 // preceded by a toolbar or a "1–45 of 45" line puts
                                 // the header well below row 0.
   HEADER_MIN_WORD_SCORE: 0.42,
-  /* A label only counts as an ANCHOR — evidence that this row is the header —
-   * at this score, and a market-time label only binds its column at it. Real
-   * header labels score 0.77 and up on every fixture, connectMLS and Matrix
-   * alike; a data row matched as a header (a lone "S" as "St", "619" as "MT")
-   * tops out around 0.54. The looser word bar above still names decoys. */
-  HEADER_MIN_ANCHOR_SCORE: 0.65,
-  HEADER_ICON_MAX_GLYPHS: 1.6,  // A trailing glyph this narrow may be a sort icon, not a letter
-  HEADER_TRIM_MIN_GAIN: 0.08,   // …and dropping it must lift the match by this much to count
   HEADER_MIN_LABELS: 4,         // Labels a row must match to be the header
   HEADER_MIN_ANCHORS: 2,        // …of which this many must be Stat/List/Sold/MLS
 
@@ -244,7 +215,4 @@ const CFG = {
   ],
   SYNTH_FONT_SIZE: 48,
   SYNTH_WEIGHT: 'bold',
-  /* Weights the font-selection pass chooses between. connectMLS draws its
-   * header and Stat column bold; Matrix draws both regular. */
-  SYNTH_WEIGHTS: ['bold', 'normal'],
 };
