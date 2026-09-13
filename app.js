@@ -147,10 +147,10 @@ copyBtn.addEventListener('click', async () => {
   if (copyBtn.disabled) return;
   const ok = await copyToClipboard(outputBox.value);
   copyBtn.classList.toggle('copied', ok);
-  copyBtn.innerHTML = ok ? '<span>✅</span> Copied' : '<span>⚠️</span> Copy failed';
+  copyBtn.textContent = ok ? 'Copied' : 'Copy failed';
   setTimeout(() => {
     copyBtn.classList.remove('copied');
-    copyBtn.innerHTML = '<span>📋</span> Copy to Clipboard';
+    copyBtn.textContent = 'Copy to Clipboard';
   }, 1600);
 });
 
@@ -158,11 +158,11 @@ uadCopyAll.addEventListener('click', async () => {
   if (uadCopyAll.disabled || !lastReport) return;
   const ok = await copyToClipboard(uadFieldsAsText(lastReport));
   uadCopyAll.classList.toggle('copied', ok);
-  uadCopyAll.innerHTML = ok ? '<span>✅</span> Copied' : '<span>⚠️</span> Copy failed';
+  uadCopyAll.textContent = ok ? 'Copied' : 'Copy failed';
   announce(ok ? 'Every field copied.' : 'Copy failed.');
   setTimeout(() => {
     uadCopyAll.classList.remove('copied');
-    uadCopyAll.innerHTML = '<span>📋</span> Copy every field';
+    uadCopyAll.textContent = 'Copy every field';
   }, 1600);
 });
 
